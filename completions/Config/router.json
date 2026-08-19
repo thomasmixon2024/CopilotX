@@ -1,0 +1,42 @@
+{
+  "version": "1.1",
+  "description": "CopilotX routing configuration for multi-agent task delegation. Supports keyword matching with optional LLM fallback for ambiguous or unmatched intents.",
+  "defaultAgent": "ask",
+
+  "routing": {
+    "ask": {
+      "intent": ["reason", "explain", "clarify", "analyze", "what", "why", "how", "define", "describe"],
+      "fallback": "explore",
+      "description": "Analytical reasoning, clarification, and explanation"
+    },
+    "explore": {
+      "intent": ["brainstorm", "expand", "ideate", "explore", "ideas", "alternatives", "creative", "imagine"],
+      "fallback": "plan",
+      "description": "Creative expansion, ideation, and alternative generation"
+    },
+    "plan": {
+      "intent": ["sequence", "workflow", "steps", "plan", "schedule", "roadmap", "order", "prioritize"],
+      "fallback": "custom",
+      "description": "Workflow sequencing, dependency identification, and structured planning"
+    },
+    "custom": {
+      "intent": ["custom", "domain", "specialized", "execute", "run", "apply", "implement"],
+      "fallback": "ask",
+      "description": "Specialized logic, domain execution, and rule application"
+    }
+  },
+
+  "rules": {
+    "missingIntent": "ask",
+    "ambiguousIntent": "explore",
+    "complexTask": "plan"
+  },
+
+  "llmRouter": {
+    "enabled": true,
+    "mode": "fallback",
+    "model": "claude-sonnet-4-6",
+    "maxTokens": 32,
+    "systemPrompt": "You are an intent classifier for a multi-agent system. Given a user message, reply with ONLY one of these exact agent keys: ask, explore, plan, custom.\n\n- ask: analytical reasoning, explanation, clarification, questions about how/why/what\n- explore: brainstorming, ideation, creative expansion, listing alternatives\n- plan: sequencing steps, workflows, roadmaps, prioritization\n- custom: specialized domain tasks, execution, applying specific rules\n\nReply with nothing but the single lowercase agent key."
+  }
+}

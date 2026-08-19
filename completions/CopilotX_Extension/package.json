@@ -1,0 +1,43 @@
+{
+  "name": "copilotx-agent-runtime",
+  "displayName": "CopilotX Agent Runtime",
+  "publisher": "thomasmixon2024",
+  "version": "0.4.0",
+  "description": "CopilotX: @workspace, tools, session memory, and inline ghost-text completions.",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "main": "extension.js",
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:copilotx.start",
+    "onCommand:copilotx.clearSession",
+    "onCommand:copilotx.explainSelection",
+    "onCommand:copilotx.applyTool"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "copilotx.start",
+        "title": "Start CopilotX Runtime"
+      },
+      {
+        "command": "copilotx.clearSession",
+        "title": "CopilotX: Clear Session"
+      },
+      {
+        "command": "copilotx.explainSelection",
+        "title": "CopilotX: Explain Selection / Active File"
+      },
+      {
+        "command": "copilotx.applyTool",
+        "title": "CopilotX: Apply Tool (with approval)"
+      }
+    ],
+    "configurationDefaults": {
+      "editor.inlineSuggest.enabled": true
+    }
+  }
+}

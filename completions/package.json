@@ -1,0 +1,32 @@
+{
+  "name": "copilotx",
+  "version": "0.7.0",
+  "description": "Local Copilot-style runtime: @workspace, tools, session memory, inline ghost-text completions.",
+  "main": "src/api/index.js",
+  "scripts": {
+    "test": "node tests/router.test.js && node tests/session.test.js && node tests/workspace.test.js && node tests/tools.test.js && node tests/completions.test.js"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "directories": {
+    "doc": "docs",
+    "example": "examples",
+    "test": "tests"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thomasmixon2024/CopilotX.git"
+  },
+  "keywords": [],
+  "author": "",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/thomasmixon2024/CopilotX/issues"
+  },
+  "homepage": "https://github.com/thomasmixon2024/CopilotX#readme",
+  "dependencies": {
+    "ajv": "^8.20.0"
+  }
+}
