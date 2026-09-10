@@ -20,14 +20,105 @@ turns that idea into a real sidebar chat + official Chat participant.
 - Commands: Explain Selection, Fix / Improve Selection
 - Also registers `@copilotx` in the VS Code Chat view (1.90+)
 
-## Run it (Extension Development Host)
+## Installation and first run
 
-1. Open this folder (`copilotx-vscode`) in VS Code.
-2. Press **F5**. A new “Extension Development Host” window opens.
-3. Click the CopilotX icon in the activity bar (left).
-4. Ask a question about the file you have open.
+### Prerequisites
 
-Shortcut: `Ctrl+Shift+I` / `Cmd+Shift+I`.
+- Windows, macOS, or Linux
+- [VS Code 1.90 or later](https://code.visualstudio.com/)
+- [Node.js 18 or later](https://nodejs.org/) (needed for packaging and local checks)
+- An API key from one of the supported providers if you want live model responses
+
+### 1. Download the project
+
+Clone the repository, or download it as a ZIP from
+[GitHub](https://github.com/thomasmixon2024/CopilotX), then open the project
+folder in VS Code:
+
+```powershell
+git clone https://github.com/thomasmixon2024/CopilotX.git
+cd CopilotX
+code .
+```
+
+No `npm install` is required to run the extension because it uses VS Code's
+built-in APIs and Node.js APIs.
+
+### 2. Get an API key
+
+Choose one provider:
+
+- **Anthropic (recommended):** create an account at
+  [console.anthropic.com](https://console.anthropic.com/), open **Settings →
+  API Keys**, select **Create Key**, and copy the key once.
+- **OpenAI:** create an account at
+  [platform.openai.com](https://platform.openai.com/), open **API keys**, select
+  **Create new secret key**, and copy the key once.
+- **NVIDIA NIM:** create an account at
+  [build.nvidia.com](https://build.nvidia.com/), sign in, select a model, and
+  choose **Get API Key**.
+
+API providers may require billing or credits. Keep the key private. Do not
+commit it to Git, put it in `package.json`, or paste it into a source file.
+
+### 3. Configure CopilotX
+
+In VS Code, open **Settings** (`Ctrl+,` / `Cmd+,`), search for `CopilotX`, and
+set the following values:
+
+| Provider | `copilotx.provider` | `copilotx.apiKey` | `copilotx.model` | `copilotx.openaiBaseUrl` |
+|---|---|---|---|---|
+| Anthropic | `anthropic` | Anthropic key | `claude-sonnet-4-5` | leave the default |
+| OpenAI | `openai` | OpenAI key | `gpt-4o` | `https://api.openai.com/v1` |
+| NVIDIA NIM | `nim` | NVIDIA key | model selected in NIM | `https://integrate.api.nvidia.com/v1` |
+
+For better key safety, environment variables are supported. Set the variable
+before launching VS Code, then leave `copilotx.apiKey` empty:
+
+```powershell
+# Anthropic
+$env:ANTHROPIC_API_KEY = "your-key-here"
+
+# OpenAI
+$env:OPENAI_API_KEY = "your-key-here"
+
+# NVIDIA NIM
+$env:NVIDIA_NIM_API_KEY = "your-key-here"
+```
+
+Restart VS Code after changing an environment variable. Never share the key
+in screenshots, chat messages, or source control.
+
+### 4. Start the extension
+
+1. Open the CopilotX project folder in VS Code.
+2. Press **F5** (or select **Run → Start Debugging**).
+3. A new **Extension Development Host** window opens.
+4. Select the **CopilotX** icon in the activity bar.
+
+### 5. Run your first command
+
+In the CopilotX sidebar, type:
+
+```text
+Read package.json and explain how this extension is configured.
+```
+
+Press **Enter** or click **Send**. With a live provider configured, CopilotX
+can call its workspace-safe `read_file` tool and then explain the result. Try
+these next:
+
+```text
+Explain the active file.
+@workspace summarize the project structure.
+Plan how to add a file-search tool.
+```
+
+You can also use the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run
+**CopilotX: Explain Selection** or **CopilotX: Fix / Improve Selection**.
+
+If no API key is configured, CopilotX still starts and uses its offline local
+response so you can verify the extension and routing.
 
 ## Hear responses aloud
 
