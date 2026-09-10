@@ -92,7 +92,22 @@ async function runTurn({ input, session, workspace, settings }) {
       }
     }
   } catch (err) {
-    text = `**${persona.name}** failed to reach the model:\n\n\`${err.message}\`\n\nFalling back to local engine.`;
+    mode = 'fallback';
+    text = [
+      `**${persona.name}** could not reach the configured model.`,
+      '',
+      `Error: \`${err.message}\``,
+      '',
+      'A deterministic local response follows. Check the provider, model, endpoint, and credentials before retrying.',
+      '',
+      localResponse({
+        agent: routed.agent,
+        personaName: persona.name,
+        input,
+        reason: routed.reason,
+        keywords: routed.matchedKeywords,
+      }),
+    ].join('\n');
   }
 
   if (!text) {
