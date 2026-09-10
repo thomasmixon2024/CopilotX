@@ -14,6 +14,44 @@ async function complete({
   messages,
   tools,
 }) {
+  if (provider === 'local') {
+    const base = (openaiBaseUrl || 'http://127.0.0.1:8082/v1').replace(/\/$/, '');
+    const headers = {
+      'content-type': 'application/json',
+    };
+    if (apiKey) headers['x-api-key'] = apiKey;
+    const selectedModel = model || await discoverLocalModel(base);
+    if (!selectedModel) {
+      return { mode: 'local', text: null, toolCalls: [] };
+    }
+    const res = await fetch(`${base}/messages`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: selectedModel,
+        max_tokens: 2048,
+        system,
+        messages: messages || [{ role: 'user', content: user }],
+        tools: tools && tools.length ? tools : undefined,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Local model ${res.status}: ${err.slice(0, 400)}`);
+    }
+    const data = await res.json();
+    const content = data.content || [];
+    return {
+      mode: 'live',
+      text: content.filter((item) => item.type === 'text').map((item) => item.text).join('\n'),
+      toolCalls: content
+        .filter((item) => item.type === 'tool_use')
+        .map((item) => ({ id: item.id, name: item.name, input: item.input || {} })),
+      assistantMessage: { role: 'assistant', content },
+      model: selectedModel,
+    };
+  }
+
   if (!provider || provider === 'none' || !apiKey) {
     return { mode: 'local', text: null, toolCalls: [] };
   }
@@ -44,6 +82,7 @@ async function complete({
       const err = await res.text();
       throw new Error(`Anthropic ${res.status}: ${err.slice(0, 400)}`);
     }
+
     const data = await res.json();
     const text = (data.content || [])
       .filter((c) => c.type === 'text')
@@ -111,6 +150,19 @@ async function complete({
   }
 
   throw new Error(`Unknown provider: ${provider}`);
+}
+
+async function discoverLocalModel(base) {
+  try {
+    const res = await fetch(`${base}/models`, { signal: AbortSignal.timeout(1500) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const models = Array.isArray(data.data) ? data.data : [];
+    const preferred = models.find((entry) => entry.id && /instruct|chat|coder/i.test(entry.id));
+    return (preferred || models[0])?.id || null;
+  } catch {
+    return null;
+  }
 }
 
 function localResponse({ agent, personaName, input, reason, keywords }) {

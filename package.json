@@ -82,7 +82,7 @@
       "properties": {
         "copilotx.provider": {
           "type": "string",
-          "enum": ["none", "anthropic", "openai", "nim"],
+          "enum": ["none", "local", "anthropic", "openai", "nim"],
           "default": "none",
           "description": "LLM provider. 'none' uses the local deterministic engine; 'nim' uses NVIDIA NIM's OpenAI-compatible API."
         },
@@ -93,7 +93,7 @@
         },
         "copilotx.model": {
           "type": "string",
-          "default": "claude-sonnet-4-5",
+          "default": "",
           "description": "Model id (e.g. claude-sonnet-4-5, gpt-4o)."
         },
         "copilotx.openaiBaseUrl": {

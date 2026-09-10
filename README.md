@@ -135,7 +135,7 @@ Settings (`Ctrl+,` → CopilotX):
 
 | Setting | Example |
 |---|---|
-| `copilotx.provider` | `anthropic`, `openai`, or `nim` |
+| `copilotx.provider` | `none`/`local` for the local FCC server, or `anthropic`, `openai`, or `nim` |
 | `copilotx.apiKey` | your key |
 | `copilotx.model` | `claude-sonnet-4-5` or `gpt-4o` |
 | `copilotx.openaiBaseUrl` | `https://api.openai.com/v1` (or a proxy) |
@@ -153,6 +153,10 @@ Extension Development Host. The included launch profile reads that variable
 without storing the key in the workspace.
 
 Without a key the router still works; replies are a structured local template.
+When the provider is `none` (the default), CopilotX probes the local FCC server
+at `http://127.0.0.1:8082/v1`, selects an available model when no model is
+specified, and uses the deterministic template only when that server is
+unavailable. An explicit `copilotx.model` is always sent unchanged.
 
 ## Package as a `.vsix`
 

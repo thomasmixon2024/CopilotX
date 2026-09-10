@@ -114,18 +114,20 @@ function collectWorkspaceSnapshot() {
 
 function getSettings() {
   const cfg = vscode.workspace.getConfiguration('copilotx');
-  const provider = process.env.COPILOTX_PROVIDER || cfg.get('provider') || 'none';
+  const configuredProvider = process.env.COPILOTX_PROVIDER || cfg.get('provider') || '';
+  const provider = configuredProvider === 'none' || !configuredProvider ? 'local' : configuredProvider;
   return {
     provider,
     apiKey:
       cfg.get('apiKey') ||
       (provider === 'nim' ? process.env.NVIDIA_NIM_API_KEY : '') ||
+      (provider === 'local' ? process.env.ANTHROPIC_AUTH_TOKEN || '' : '') ||
       '',
     model: process.env.COPILOTX_MODEL || cfg.get('model') || '',
     openaiBaseUrl:
       process.env.COPILOTX_BASE_URL ||
-      cfg.get('openaiBaseUrl') ||
-      'https://api.openai.com/v1',
+      (provider === 'local' ? 'http://127.0.0.1:8082/v1' : cfg.get('openaiBaseUrl')) ||
+      (provider === 'local' ? 'http://127.0.0.1:8082/v1' : 'https://api.openai.com/v1'),
     includeWorkspace: cfg.get('includeWorkspace') !== false,
   };
 }
