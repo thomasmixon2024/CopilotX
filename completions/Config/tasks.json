@@ -1,0 +1,8 @@
+{
+  "tasks": {
+    "ask": { "agent": "ask", "actions": ["interpretIntent"] },
+    "explore": { "agent": "explore", "actions": ["generateAlternatives"] },
+    "plan": { "agent": "plan", "actions": ["sequenceWork"] },
+    "custom": { "agent": "custom", "actions": ["runCustomLogic"] }
+  }
+}

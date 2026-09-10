@@ -1,0 +1,8 @@
+{
+  "actions": {
+    "interpretIntent": { "description": "Interpret the request and identify missing context." },
+    "generateAlternatives": { "description": "Generate grounded alternatives and tradeoffs." },
+    "sequenceWork": { "description": "Sequence work by dependencies and milestones." },
+    "runCustomLogic": { "description": "Apply the relevant domain-oriented logic." }
+  }
+}
