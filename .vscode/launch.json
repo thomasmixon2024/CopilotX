@@ -1,0 +1,17 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run CopilotX Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
+      "env": {
+        "COPILOTX_PROVIDER": "nim",
+        "COPILOTX_BASE_URL": "https://integrate.api.nvidia.com/v1",
+        "COPILOTX_MODEL": "meta/llama-3.1-8b-instruct",
+        "NVIDIA_NIM_API_KEY": "${env:NVIDIA_NIM_API_KEY}"
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "defaultAgent": "ask",
+  "routing": {
+    "ask": {
+      "intent": ["reason", "explain", "clarify", "analyze", "what", "why", "how", "define", "describe", "does", "mean"],
+      "description": "Analytical reasoning and explanation"
+    },
+    "explore": {
+      "intent": ["brainstorm", "expand", "ideate", "explore", "ideas", "alternatives", "creative", "imagine", "options"],
+      "description": "Creative expansion and alternatives"
+    },
+    "plan": {
+      "intent": ["sequence", "workflow", "steps", "plan", "schedule", "roadmap", "order", "prioritize", "implement"],
+      "description": "Structured planning"
+    },
+    "custom": {
+      "intent": ["fix", "refactor", "patch", "generate", "write", "code", "implement", "create", "apply"],
+      "description": "Code generation and execution-style tasks"
+    }
+  }
+}

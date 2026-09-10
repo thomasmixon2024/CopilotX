@@ -1,0 +1,121 @@
+{
+  "name": "copilotx-chat",
+  "displayName": "CopilotX Chat",
+  "description": "Copilot-style multi-agent chat for VS Code. Routes to Ask, Explore, Plan, or Custom agents with workspace context and optional live LLM.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": ["Machine Learning", "Other"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./src/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "copilotx",
+          "title": "CopilotX",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "copilotx": [
+        {
+          "type": "webview",
+          "id": "copilotx.chatView",
+          "name": "Chat"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "copilotx.openChat",
+        "title": "CopilotX: Open Chat",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "copilotx.explainSelection",
+        "title": "CopilotX: Explain Selection"
+      },
+      {
+        "command": "copilotx.fixSelection",
+        "title": "CopilotX: Fix / Improve Selection"
+      },
+      {
+        "command": "copilotx.clearSession",
+        "title": "CopilotX: Clear Chat Session"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "copilotx.explainSelection",
+          "when": "editorHasSelection",
+          "group": "copilotx@1"
+        },
+        {
+          "command": "copilotx.fixSelection",
+          "when": "editorHasSelection",
+          "group": "copilotx@2"
+        }
+      ],
+      "commandPalette": [
+        { "command": "copilotx.openChat" },
+        { "command": "copilotx.explainSelection" },
+        { "command": "copilotx.fixSelection" },
+        { "command": "copilotx.clearSession" }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "copilotx.openChat",
+        "key": "ctrl+shift+i",
+        "mac": "cmd+shift+i"
+      }
+    ],
+    "configuration": {
+      "title": "CopilotX",
+      "properties": {
+        "copilotx.provider": {
+          "type": "string",
+          "enum": ["none", "anthropic", "openai", "nim"],
+          "default": "none",
+          "description": "LLM provider. 'none' uses the local deterministic engine; 'nim' uses NVIDIA NIM's OpenAI-compatible API."
+        },
+        "copilotx.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for the selected provider. You can also set ANTHROPIC_API_KEY or OPENAI_API_KEY in the environment."
+        },
+        "copilotx.model": {
+          "type": "string",
+          "default": "claude-sonnet-4-5",
+          "description": "Model id (e.g. claude-sonnet-4-5, gpt-4o)."
+        },
+        "copilotx.openaiBaseUrl": {
+          "type": "string",
+          "default": "https://api.openai.com/v1",
+          "description": "OpenAI-compatible base URL. For NVIDIA NIM, use https://integrate.api.nvidia.com/v1 or your local NIM URL."
+        },
+        "copilotx.includeWorkspace": {
+          "type": "boolean",
+          "default": true,
+          "description": "Attach active file, selection, open tabs, and project tree to every chat turn."
+        }
+      }
+    },
+    "chatParticipants": [
+      {
+        "id": "copilotx.agent",
+        "name": "copilotx",
+        "fullName": "CopilotX",
+        "description": "Multi-agent coding assistant (Ask / Explore / Plan / Custom)",
+        "isSticky": true
+      }
+    ]
+  }
+}
