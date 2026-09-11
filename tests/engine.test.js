@@ -9,7 +9,7 @@ const { runTurn } = require('../src/core/engine');
 
 const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'copilotx-engine-'));
 const workspace = { workspaceFolders: [{ name: 'w', path: tmpRoot }] };
-const baseSettings = { model: '', openaiBaseUrl: 'https://api.openai.com/v1', includeWorkspace: false };
+const baseSettings = { model: '', openaiBaseUrl: 'https://api.openai.com/v1', includeWorkspace: false, streamResponses: false };
 
 const realFetch = globalThis.fetch;
 
@@ -109,6 +109,43 @@ test('live provider failure falls back with the error surfaced', async () => {
     assert.strictEqual(result.mode, 'fallback');
     assert.ok(result.text.includes('could not reach the configured model'));
     assert.ok(result.text.includes('OpenAI 500'));
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('streaming mode forwards deltas through runTurn', async () => {
+  const encoder = new TextEncoder();
+  globalThis.fetch = async () => ({
+    ok: true,
+    body: {
+      getReader() {
+        const chunks = [
+          encoder.encode('data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n'),
+          encoder.encode('data: {"choices":[{"delta":{"content":" from stream"}}]}\n\ndata: [DONE]\n\n'),
+        ];
+        let i = 0;
+        return {
+          read: () =>
+            i < chunks.length
+              ? Promise.resolve({ done: false, value: chunks[i++] })
+              : Promise.resolve({ done: true, value: undefined }),
+        };
+      },
+    },
+  });
+  const deltas = [];
+  try {
+    const result = await runTurn({
+      input: 'say hi',
+      session: { sessionId: 't', turns: [] },
+      workspace,
+      settings: { ...baseSettings, provider: 'openai', apiKey: 'test-key', streamResponses: true },
+      onDelta: (t) => deltas.push(t),
+    });
+    assert.strictEqual(result.mode, 'live');
+    assert.strictEqual(result.text, 'Hello from stream');
+    assert.deepStrictEqual(deltas, ['Hello', ' from stream']);
   } finally {
     globalThis.fetch = realFetch;
   }

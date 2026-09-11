@@ -5,9 +5,19 @@ const { CopilotXChatViewProvider } = require('./chatView');
 const { runTurn } = require('./core/engine');
 const { createSession, appendTurn } = require('./core/session');
 const { collectWorkspaceSnapshot, getSettings, initSecrets } = require('./workspaceCollector');
+const { registerProposalReview } = require('./proposalReview');
+const { CopilotXInlineCompletionProvider } = require('./inlineCompletion');
 
 function activate(context) {
   initSecrets(context.secrets);
+  registerProposalReview(context);
+
+  context.subscriptions.push(
+    vscode.languages.registerInlineCompletionItemProvider(
+      { pattern: '**' },
+      new CopilotXInlineCompletionProvider()
+    )
+  );
 
   const provider = new CopilotXChatViewProvider(context.extensionUri);
   context.subscriptions.push(

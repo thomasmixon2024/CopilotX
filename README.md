@@ -14,10 +14,14 @@ turns that idea into a real sidebar chat + official Chat participant.
 - `@workspace` context: active file, selection, cursor, open tabs, project tree
 - Multi-turn session memory in the sidebar
 - Optional live models: Anthropic or any OpenAI-compatible API
-- Live tool-calling loop with a workspace-safe, read-only `read_file` tool
+- Workspace tools: `read_file`, `list_dir`, and content `search_files`
+- **File editing with approval**: the model proposes `write_file` / `edit_file`
+  changes; you review a diff and Accept or Discard (`copilotx.allowWrites`)
+- **Streaming responses**: token-by-token output with a Stop button
+- Optional Copilot-style **ghost-text inline completions** while you type
 - Optional local text-to-speech for every sidebar assistant response
 - Works offline with a local deterministic engine if no key is set
-- Commands: Explain Selection, Fix / Improve Selection
+- Commands: Explain Selection, Fix / Improve Selection, Store API Key, Stop
 - Also registers `@copilotx` in the VS Code Chat view (1.90+)
 
 ## Installation and first run
@@ -197,20 +201,56 @@ available. Anthropic tool calls use the native `tool_use` / `tool_result`
 message format; OpenAI-compatible providers use function tools and tool
 messages.
 
-The initial tool is `read_file`. It is read-only, accepts workspace-relative
-or in-workspace absolute paths, and rejects paths that resolve outside an open
-workspace (including symlink escapes). New Claude Code-style capabilities can
-be added in `src/core/tools.js` without changing the provider adapters.
+Read tools — `read_file`, `list_dir`, `search_files` — execute immediately.
+They accept workspace-relative or in-workspace absolute paths and reject paths
+that resolve outside an open workspace (including symlink escapes). Search and
+listing results are capped so a large repository cannot blow up the context.
+
+## Editing your code
+
+With `copilotx.allowWrites` set to `approval` (the default), the model can
+propose changes with two tools:
+
+- `write_file` — full content for a new or existing file
+- `edit_file` — replace one exact, unique snippet inside a file
+
+Proposed changes **never touch disk automatically**. Each proposal appears in
+the sidebar as a card with `+added` / `-removed` counts and three actions:
+
+| Action | What happens |
+|---|---|
+| **Review** | Opens a VS Code diff editor: original ⇄ proposed |
+| **Accept** | Applies the change (only if the file is unchanged since the proposal) and opens the file |
+| **Discard** | Drops the proposal |
+
+Setting `copilotx.allowWrites` to `auto` applies changes immediately (the diff
+still opens for reference); `off` removes the write tools from the model's tool
+list entirely, so it cannot even request them.
+
+## Streaming and inline completions
+
+`copilotx.streamResponses` (default on) streams live-provider responses
+token-by-token into the sidebar. A **Stop** button (and the
+**CopilotX: Stop Generation** command) aborts mid-response; the partial text is
+kept. Both Anthropic and OpenAI-compatible Server-Sent-Events streams are
+supported, including streamed tool calls.
+
+`copilotx.inlineCompletions` (default off) enables Copilot-style ghost text in
+the editor. It requires a live provider and a valid key; suggestions are
+requested after a short debounce, aborted when superseded, and deduplicated
+against the text before your cursor.
 
 ## Layout
 
 ```
   package.json          # contribution points, chat participant, view, test script
   config/               # router + personas
-  src/extension.js      # activate, commands, Chat API
-  src/chatView.js       # sidebar webview
+  src/extension.js      # activate, commands, Chat API, inline completions
+  src/chatView.js       # sidebar webview (streaming bubble, proposal cards)
+  src/proposalReview.js # diff preview + apply/discard for write proposals
+  src/inlineCompletion.js
   src/workspaceCollector.js
-  src/core/             # router, session, workspace, llm, engine, tools
+  src/core/             # router, session, workspace, llm (+SSE streaming), engine, tools, proposals
   tests/                # zero-dependency node:test suite (npm test)
   media/icon.svg
 ```

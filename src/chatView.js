@@ -4,6 +4,7 @@ const vscode = require('vscode');
 const { runTurn } = require('./core/engine');
 const { createSession, appendTurn } = require('./core/session');
 const { collectWorkspaceSnapshot, getSettings } = require('./workspaceCollector');
+const proposalReview = require('./proposalReview');
 
 class CopilotXChatViewProvider {
   constructor(extensionUri) {
@@ -27,6 +28,27 @@ class CopilotXChatViewProvider {
         await this.handleUserMessage(msg.text);
       } else if (msg.type === 'clear') {
         this.clear();
+      } else if (msg.type === 'reviewProposal') {
+        await proposalReview.reviewProposal(msg.id);
+      } else if (msg.type === 'acceptProposal') {
+        const applied = await proposalReview.acceptProposal(msg.id);
+        this.view?.webview.postMessage({
+          type: 'proposalResolved',
+          id: msg.id,
+          applied: Boolean(applied),
+        });
+      } else if (msg.type === 'discardProposal') {
+        proposalReview.discardProposal(msg.id);
+        this.view?.webview.postMessage({
+          type: 'proposalResolved',
+          id: msg.id,
+          applied: false,
+        });
+      } else if (msg.type === 'stop') {
+        if (this.abortController) {
+          this.abortController.abort();
+          this.view?.webview.postMessage({ type: 'status', text: 'Stopping…' });
+        }
       }
     });
   }
@@ -53,6 +75,10 @@ class CopilotXChatViewProvider {
     this.history.push({ role: 'user', text: input });
     this.view?.webview.postMessage({ type: 'user', text: input });
     this.view?.webview.postMessage({ type: 'status', text: 'Routing…' });
+    this.view?.webview.postMessage({ type: 'streamStart' });
+
+    const abortController = new AbortController();
+    this.abortController = abortController;
 
     try {
       const result = await runTurn({
@@ -60,6 +86,10 @@ class CopilotXChatViewProvider {
         session: this.session,
         workspace: collectWorkspaceSnapshot(),
         settings: getSettings(),
+        onDelta: (chunk) => {
+          this.view?.webview.postMessage({ type: 'delta', text: chunk });
+        },
+        signal: abortController.signal,
       });
       this.session = appendTurn(this.session, {
         input,
@@ -75,6 +105,22 @@ class CopilotXChatViewProvider {
         reason: result.reason,
         text: result.text,
       });
+      const pending = (result.proposals || []).filter((p) => !p.applied);
+      for (const proposal of pending) {
+        proposalReview.storeProposal(proposal);
+      }
+      if (pending.length) {
+        this.view?.webview.postMessage({
+          type: 'proposals',
+          items: pending.map((p) => ({
+            id: p.id,
+            path: p.relPath,
+            added: p.diff.added,
+            removed: p.diff.removed,
+            created: p.created,
+          })),
+        });
+      }
     } catch (err) {
       this.view?.webview.postMessage({
         type: 'assistant',
@@ -84,7 +130,9 @@ class CopilotXChatViewProvider {
         text: String(err.message || err),
       });
     } finally {
+      if (this.abortController === abortController) this.abortController = undefined;
       this.pending = false;
+      this.view?.webview.postMessage({ type: 'streamEnd' });
     }
   }
 
@@ -156,6 +204,26 @@ class CopilotXChatViewProvider {
     .speak:hover { color: var(--fg); }
     .msg.user .bubble { border-left: 3px solid var(--accent); }
     .msg.assistant .bubble { border-left: 3px solid #6c8cff; }
+    .proposal {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: var(--bubble);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .proposal .path { font-family: var(--vscode-editor-font-family, monospace); font-size: 12px; word-break: break-all; }
+    .proposal .stats { font-size: 11px; }
+    .proposal .stats .add { color: var(--vscode-testing-iconPassed, #3fb950); }
+    .proposal .stats .del { color: var(--vscode-testing-iconFailed, #f85149); }
+    .proposal .row { display: flex; gap: 6px; }
+    .proposal button { padding: 4px 10px; font-size: 11px; border-radius: 5px; cursor: pointer; }
+    .proposal .accept { background: var(--accent); color: var(--accent-fg); border: 0; }
+    .proposal .review, .proposal .discard {
+      background: transparent; color: var(--fg); border: 1px solid var(--border);
+    }
+    .proposal .done { font-size: 11px; color: var(--muted); }
     footer {
       display: flex;
       gap: 6px;
@@ -200,6 +268,7 @@ class CopilotXChatViewProvider {
   <footer>
     <textarea id="q" placeholder="Ask about the current file…  (@workspace is attached)"></textarea>
     <button id="send">Send</button>
+    <button id="stop" class="ghost" style="display:none">Stop</button>
     <button id="clear" class="ghost" title="Clear session">Clear</button>
   </footer>
   <script nonce="${nonce}">
@@ -293,13 +362,100 @@ class CopilotXChatViewProvider {
       vscode.postMessage({ type: 'ask', text });
     }
 
+    function addProposal(item) {
+      const wrap = document.createElement('div');
+      wrap.className = 'proposal';
+      wrap.dataset.proposalId = item.id;
+
+      const pathDiv = document.createElement('div');
+      pathDiv.className = 'path';
+      pathDiv.textContent = (item.created ? '[new] ' : '') + item.path;
+
+      const stats = document.createElement('div');
+      stats.className = 'stats';
+      const add = document.createElement('span');
+      add.className = 'add';
+      add.textContent = '+' + item.added;
+      const del = document.createElement('span');
+      del.className = 'del';
+      del.textContent = ' -' + item.removed;
+      stats.append(add, del);
+
+      const row = document.createElement('div');
+      row.className = 'row';
+      const reviewBtn = document.createElement('button');
+      reviewBtn.className = 'review';
+      reviewBtn.textContent = 'Review';
+      reviewBtn.addEventListener('click', () => vscode.postMessage({ type: 'reviewProposal', id: item.id }));
+      const acceptBtn = document.createElement('button');
+      acceptBtn.className = 'accept';
+      acceptBtn.textContent = 'Accept';
+      acceptBtn.addEventListener('click', () => vscode.postMessage({ type: 'acceptProposal', id: item.id }));
+      const discardBtn = document.createElement('button');
+      discardBtn.className = 'discard';
+      discardBtn.textContent = 'Discard';
+      discardBtn.addEventListener('click', () => vscode.postMessage({ type: 'discardProposal', id: item.id }));
+      row.append(reviewBtn, acceptBtn, discardBtn);
+
+      wrap.append(pathDiv, stats, row);
+      thread.appendChild(wrap);
+      thread.scrollTop = thread.scrollHeight;
+    }
+
+    function resolveProposal(id, applied) {
+      const card = thread.querySelector('.proposal[data-proposal-id="' + id + '"]');
+      if (!card) return;
+      card.querySelectorAll('button').forEach((b) => b.remove());
+      const done = document.createElement('div');
+      done.className = 'done';
+      done.textContent = applied ? 'Applied.' : 'Discarded.';
+      card.appendChild(done);
+    }
+
+    const stopBtn = document.getElementById('stop');
+    let streamBubble = null;
+    let streamText = '';
+
+    function endStream() {
+      stopBtn.style.display = 'none';
+      if (streamBubble) {
+        streamBubble.remove();
+        streamBubble = null;
+      }
+      streamText = '';
+    }
+
+    function appendStream(chunk) {
+      if (!streamBubble) {
+        streamBubble = document.createElement('div');
+        streamBubble.className = 'msg assistant';
+        streamBubble.innerHTML = '<div class="meta">CopilotX · streaming</div><div class="bubble"></div>';
+        thread.appendChild(streamBubble);
+      }
+      streamText += chunk;
+      streamBubble.querySelector('.bubble').textContent = streamText;
+      thread.scrollTop = thread.scrollHeight;
+    }
+
+    stopBtn.addEventListener('click', () => vscode.postMessage({ type: 'stop' }));
+
     window.addEventListener('message', (e) => {
       const m = e.data;
       if (m.type === 'user') add('user', 'You', m.text);
       if (m.type === 'assistant') {
         status.textContent = '';
+        endStream();
         add('assistant', (m.agent || 'CopilotX') + (m.mode ? ' · ' + m.mode : ''), m.text);
       }
+      if (m.type === 'delta') appendStream(m.text);
+      if (m.type === 'streamStart') {
+        stopBtn.style.display = '';
+      }
+      if (m.type === 'streamEnd') endStream();
+      if (m.type === 'proposals') {
+        (m.items || []).forEach(addProposal);
+      }
+      if (m.type === 'proposalResolved') resolveProposal(m.id, m.applied);
       if (m.type === 'status') status.textContent = m.text;
       if (m.type === 'cleared') {
         stopSpeech();

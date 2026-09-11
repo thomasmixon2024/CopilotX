@@ -12,11 +12,14 @@ const workspace = { workspaceFolders: [{ name: 'w', path: tmpRoot }] };
 
 fs.writeFileSync(path.join(tmpRoot, 'hello.txt'), 'line1\nline2\nline3\n', 'utf8');
 
-test('getToolDefinitions exposes read_file with a schema', () => {
+test('getToolDefinitions exposes read/list/search with schemas', () => {
   const tools = getToolDefinitions();
-  assert.strictEqual(tools.length, 1);
-  assert.strictEqual(tools[0].name, 'read_file');
-  assert.strictEqual(tools[0].input_schema.required[0], 'path');
+  assert.strictEqual(tools.length, 3);
+  assert.deepStrictEqual(
+    tools.map((t) => t.name).sort(),
+    ['list_dir', 'read_file', 'search_files']
+  );
+  assert.strictEqual(tools.find((t) => t.name === 'read_file').input_schema.required[0], 'path');
 });
 
 test('read_file reads a workspace-relative file with line ranges', () => {
@@ -54,6 +57,66 @@ test('read_file rejects absolute paths outside the workspace', () => {
 test('read_file rejects unknown tools and missing paths', () => {
   assert.throws(() => executeToolCall({ name: 'write_file', input: {} }, workspace), /Unknown tool/);
   assert.throws(() => executeToolCall({ name: 'read_file', input: { path: '' } }, workspace), /non-empty path/);
+});
+
+test('list_dir lists entries with depth limits and skips hidden/node_modules', () => {
+  fs.mkdirSync(path.join(tmpRoot, 'sub'), { recursive: true });
+  fs.mkdirSync(path.join(tmpRoot, 'sub', 'node_modules'), { recursive: true });
+  fs.mkdirSync(path.join(tmpRoot, 'sub', 'deep', 'deeper'), { recursive: true });
+  fs.writeFileSync(path.join(tmpRoot, 'sub', 'a.js'), 'x', 'utf8');
+  fs.writeFileSync(path.join(tmpRoot, 'sub', 'node_modules', 'dep.js'), 'x', 'utf8');
+  fs.writeFileSync(path.join(tmpRoot, 'sub', 'deep', 'deeper', 'z.js'), 'x', 'utf8');
+  try {
+    const result = executeToolCall({ name: 'list_dir', input: { path: 'sub', depth: 2 } }, workspace);
+    assert.ok(result.entries.includes('sub/a.js'));
+    assert.ok(result.entries.includes('sub/deep/'));
+    assert.ok(result.entries.includes('sub/deep/deeper/')); // dir entry itself still listed
+    assert.ok(!result.entries.includes('sub/node_modules/'));
+    assert.ok(!result.entries.includes('sub/deep/deeper/z.js')); // deeper contents beyond depth
+  } finally {
+    fs.rmSync(path.join(tmpRoot, 'sub'), { recursive: true, force: true });
+  }
+});
+
+test('list_dir rejects paths outside the workspace and non-directories', () => {
+  assert.throws(
+    () => executeToolCall({ name: 'list_dir', input: { path: '..' } }, workspace),
+    /outside the current workspace|Path is not a directory/
+  );
+  assert.throws(
+    () => executeToolCall({ name: 'list_dir', input: { path: 'hello.txt' } }, workspace),
+    /Path is not a directory/
+  );
+});
+
+test('search_files finds literal and regex matches with caps', () => {
+  fs.mkdirSync(path.join(tmpRoot, 'scan'), { recursive: true });
+  fs.writeFileSync(path.join(tmpRoot, 'scan', 'one.js'), 'const alpha = 1;\nconst beta = alpha;\n', 'utf8');
+  fs.writeFileSync(path.join(tmpRoot, 'scan', 'two.js'), 'gamma();\n', 'utf8');
+  fs.writeFileSync(path.join(tmpRoot, 'scan', 'bin.dat'), 'ok\x00binary\n', 'utf8');
+  try {
+    const literal = executeToolCall({ name: 'search_files', input: { pattern: 'ALPHA' } }, workspace);
+    assert.strictEqual(literal.total_matches, 2);
+    assert.ok(literal.matches.every((m) => m.file.startsWith('scan/')));
+
+    const regex = executeToolCall({
+      name: 'search_files',
+      input: { pattern: 'const \\w+ = ', is_regex: true, max_results: 1 },
+    }, workspace);
+    assert.strictEqual(regex.total_matches, 1);
+    assert.strictEqual(regex.truncated, true);
+
+    assert.throws(
+      () => executeToolCall({ name: 'search_files', input: { pattern: '   ' } }, workspace),
+      /non-empty pattern/
+    );
+    assert.throws(
+      () => executeToolCall({ name: 'search_files', input: { pattern: 'x(', is_regex: true } }, workspace),
+      /Invalid regular expression/
+    );
+  } finally {
+    fs.rmSync(path.join(tmpRoot, 'scan'), { recursive: true, force: true });
+  }
 });
 
 test('read_file caps very large files and reports truncation', () => {

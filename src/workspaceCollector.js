@@ -142,6 +142,11 @@ function getSettings() {
         ? 'http://127.0.0.1:8082/v1'
         : cfg.get('openaiBaseUrl') || 'https://api.openai.com/v1'),
     includeWorkspace: cfg.get('includeWorkspace') !== false,
+    allowWrites: ['off', 'approval', 'auto'].includes(cfg.get('allowWrites'))
+      ? cfg.get('allowWrites')
+      : 'approval',
+    streamResponses: cfg.get('streamResponses') !== false,
+    inlineCompletions: cfg.get('inlineCompletions') === true,
   };
 }
 

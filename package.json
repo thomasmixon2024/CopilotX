@@ -2,7 +2,7 @@
   "name": "copilotx-chat",
   "displayName": "CopilotX Chat",
   "description": "Copilot-style multi-agent chat for VS Code. Routes to Ask, Explore, Plan, or Custom agents with workspace context and optional live LLM.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "local",
   "engines": {
     "vscode": "^1.90.0",
@@ -56,6 +56,10 @@
       {
         "command": "copilotx.storeApiKey",
         "title": "CopilotX: Store API Key"
+      },
+      {
+        "command": "copilotx.stopGeneration",
+        "title": "CopilotX: Stop Generation"
       }
     ],
     "menus": {
@@ -76,7 +80,8 @@
         { "command": "copilotx.explainSelection" },
         { "command": "copilotx.fixSelection" },
         { "command": "copilotx.clearSession" },
-        { "command": "copilotx.storeApiKey" }
+        { "command": "copilotx.storeApiKey" },
+        { "command": "copilotx.stopGeneration" }
       ]
     },
     "keybindings": [
@@ -114,6 +119,22 @@
           "type": "boolean",
           "default": true,
           "description": "Attach active file, selection, open tabs, and project tree to every chat turn."
+        },
+        "copilotx.allowWrites": {
+          "type": "string",
+          "enum": ["off", "approval", "auto"],
+          "default": "approval",
+          "description": "File-edit tools. 'off' hides write tools from the model; 'approval' shows a diff you must Accept; 'auto' applies changes immediately and opens the diff."
+        },
+        "copilotx.streamResponses": {
+          "type": "boolean",
+          "default": true,
+          "description": "Stream assistant responses token-by-token in the sidebar (live providers)."
+        },
+        "copilotx.inlineCompletions": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable Copilot-style ghost-text completions while typing. Requires a live provider (provider != none) with a valid API key."
         }
       }
     },

@@ -5,8 +5,9 @@ const path = require('path');
 const { resolveAgent, loadRouterConfig } = require('./router');
 const { formatContextBlock, summarize } = require('./session');
 const { formatWorkspaceBlock } = require('./workspace');
-const { complete, localResponse } = require('./llm');
+const { complete, streamComplete, localResponse } = require('./llm');
 const { getToolDefinitions, executeToolCall } = require('./tools');
+const { buildProposal, applyProposal } = require('./proposals');
 
 const MAX_TOOL_ROUNDS = 8;
 
@@ -15,7 +16,7 @@ function loadPersonas() {
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 }
 
-async function runTurn({ input, session, workspace, settings }) {
+async function runTurn({ input, session, workspace, settings, onDelta, signal }) {
   const routerCfg = loadRouterConfig();
   const personas = loadPersonas();
   const routed = resolveAgent(input, routerCfg);
@@ -37,7 +38,11 @@ async function runTurn({ input, session, workspace, settings }) {
 
   let mode = 'local';
   let text;
-  const tools = getToolDefinitions();
+  const proposals = [];
+  const writeMode = ['off', 'approval', 'auto'].includes(settings.allowWrites)
+    ? settings.allowWrites
+    : 'approval';
+  const tools = getToolDefinitions({ includeWrites: writeMode !== 'off' });
   const messages = settings.provider === 'anthropic'
     ? [{ role: 'user', content: userParts.join('\n\n') }]
     : [
@@ -46,7 +51,7 @@ async function runTurn({ input, session, workspace, settings }) {
       ];
   try {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
-      const live = await complete({
+      const requestArgs = {
         provider: settings.provider,
         apiKey,
         model: settings.model,
@@ -55,7 +60,11 @@ async function runTurn({ input, session, workspace, settings }) {
         user: userParts.join('\n\n'),
         messages,
         tools,
-      });
+      };
+      const useStream = settings.streamResponses !== false;
+      const live = useStream
+        ? await streamComplete({ ...requestArgs, onDelta, signal })
+        : await complete(requestArgs);
       mode = live.mode;
       if (!live.toolCalls || !live.toolCalls.length) {
         if (live.mode === 'live' && !(live.text && live.text.trim())) {
@@ -69,10 +78,38 @@ async function runTurn({ input, session, workspace, settings }) {
       messages.push(live.assistantMessage);
       for (const call of live.toolCalls) {
         let result;
-        try {
-          result = executeToolCall(call, workspace);
-        } catch (err) {
-          result = { error: err.message };
+        let proposal = null;
+        if (call.name === 'write_file' || call.name === 'edit_file') {
+          try {
+            proposal = buildProposal(call, workspace);
+            if (writeMode === 'auto') {
+              applyProposal(proposal);
+              proposal.applied = true;
+              result = {
+                status: 'applied',
+                path: proposal.relPath,
+                diff: proposal.diff,
+                message: 'Change applied automatically (allowWrites=auto).',
+              };
+            } else {
+              result = {
+                status: 'proposed',
+                path: proposal.relPath,
+                diff: proposal.diff,
+                message:
+                  'Change proposed to the user and awaiting approval. Do not assume it was applied.',
+              };
+            }
+            proposals.push(proposal);
+          } catch (err) {
+            result = { error: err.message };
+          }
+        } else {
+          try {
+            result = executeToolCall(call, workspace);
+          } catch (err) {
+            result = { error: err.message };
+          }
         }
         if (settings.provider === 'anthropic') {
           messages.push({
@@ -96,22 +133,26 @@ async function runTurn({ input, session, workspace, settings }) {
       }
     }
   } catch (err) {
-    mode = 'fallback';
-    text = [
-      `**${persona.name}** could not reach the configured model.`,
-      '',
-      `Error: \`${err.message}\``,
-      '',
-      'A deterministic local response follows. Check the provider, model, endpoint, and credentials before retrying.',
-      '',
-      localResponse({
-        agent: routed.agent,
-        personaName: persona.name,
-        input,
-        reason: routed.reason,
-        keywords: routed.matchedKeywords,
-      }),
-    ].join('\n');
+    if (err && (err.name === 'AbortError' || err.code === 'ABORT_ERR') && text) {
+      mode = 'stopped';
+    } else {
+      mode = 'fallback';
+      text = [
+        `**${persona.name}** could not reach the configured model.`,
+        '',
+        `Error: \`${err.message}\``,
+        '',
+        'A deterministic local response follows. Check the provider, model, endpoint, and credentials before retrying.',
+        '',
+        localResponse({
+          agent: routed.agent,
+          personaName: persona.name,
+          input,
+          reason: routed.reason,
+          keywords: routed.matchedKeywords,
+        }),
+      ].join('\n');
+    }
   }
 
   if (!text) {
@@ -131,6 +172,7 @@ async function runTurn({ input, session, workspace, settings }) {
     matchedKeywords: routed.matchedKeywords,
     mode,
     text,
+    proposals,
     summary: summarize(text),
   };
 }
