@@ -202,6 +202,19 @@ class CopilotXChatViewProvider {
       font-size: 11px;
     }
     .speak:hover { color: var(--fg); }
+    .icon-btn {
+      background: transparent;
+      color: var(--fg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 9px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .icon-btn:hover { border-color: var(--accent); color: var(--accent-fg); }
+    .icon-btn.speaking { color: var(--accent-fg); border-color: var(--accent); background: var(--accent); }
     .msg.user .bubble { border-left: 3px solid var(--accent); }
     .msg.assistant .bubble { border-left: 3px solid #6c8cff; }
     .proposal {
@@ -269,6 +282,7 @@ class CopilotXChatViewProvider {
     <textarea id="q" placeholder="Ask about the current file…  (@workspace is attached)"></textarea>
     <button id="send">Send</button>
     <button id="stop" class="ghost" style="display:none">Stop</button>
+    <button id="speakLatest" class="icon-btn" title="Listen to the latest response"></button>
     <button id="clear" class="ghost" title="Clear session">Clear</button>
   </footer>
   <script nonce="${nonce}">
@@ -279,6 +293,7 @@ class CopilotXChatViewProvider {
 
     let currentSpeech = null;
     let currentSpeechButton = null;
+    let lastAssistantText = '';
 
     function speechText(text) {
       return String(text || '')
@@ -294,7 +309,10 @@ class CopilotXChatViewProvider {
     function stopSpeech() {
       if (!('speechSynthesis' in window)) return;
       window.speechSynthesis.cancel();
-      if (currentSpeechButton) currentSpeechButton.textContent = 'Hear aloud';
+      if (currentSpeechButton) {
+        if (currentSpeechButton.id === 'speakLatest') setSpeaking(false);
+        else currentSpeechButton.textContent = 'Hear aloud';
+      }
       currentSpeech = null;
       currentSpeechButton = null;
     }
@@ -320,6 +338,7 @@ class CopilotXChatViewProvider {
     }
 
     function add(role, title, text) {
+      if (role === 'assistant') lastAssistantText = text;
       const wrap = document.createElement('div');
       wrap.className = 'msg ' + role;
       wrap.innerHTML = '<div class="meta"></div><div class="bubble"></div>';
@@ -439,6 +458,54 @@ class CopilotXChatViewProvider {
 
     stopBtn.addEventListener('click', () => vscode.postMessage({ type: 'stop' }));
 
+    const speakLatestBtn = document.getElementById('speakLatest');
+    const SPEAKER_ICON =
+      '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+      '<path d="M8 1.8v12.4L4.6 10.8H2.2A1.2 1.2 0 0 1 1 9.6V6.4a1.2 1.2 0 0 1 1.2-1.2h2.4L8 1.8z" fill="currentColor"/>' +
+      '<path d="M10.6 5.4a3.4 3.4 0 0 1 0 5.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>' +
+      '<path d="M12.7 3.3a6.4 6.4 0 0 1 0 9.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>' +
+      '</svg>';
+    const STOP_ICON =
+      '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+      '<rect x="3.5" y="3.5" width="9" height="9" rx="1.5" fill="currentColor"/>' +
+      '</svg>';
+
+    function setSpeaking(on) {
+      speakLatestBtn.innerHTML = on ? STOP_ICON : SPEAKER_ICON;
+      speakLatestBtn.title = on ? 'Stop playback' : 'Listen to the latest response';
+      speakLatestBtn.classList.toggle('speaking', on);
+    }
+
+    setSpeaking(false);
+
+    speakLatestBtn.addEventListener('click', () => {
+      if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
+        status.textContent = 'Text-to-speech is not available in this VS Code host.';
+        return;
+      }
+      if (currentSpeech) {
+        stopSpeech();
+        return;
+      }
+      const spoken = speechText(lastAssistantText);
+      if (!spoken) {
+        status.textContent = 'No assistant response to read yet.';
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(spoken);
+      currentSpeech = utterance;
+      currentSpeechButton = speakLatestBtn;
+      setSpeaking(true);
+      utterance.onend = utterance.onerror = () => {
+        if (currentSpeech === utterance) currentSpeech = null;
+        if (currentSpeechButton === speakLatestBtn) {
+          currentSpeechButton = null;
+          setSpeaking(false);
+        }
+      };
+      window.speechSynthesis.speak(utterance);
+    });
+
     window.addEventListener('message', (e) => {
       const m = e.data;
       if (m.type === 'user') add('user', 'You', m.text);
@@ -460,6 +527,7 @@ class CopilotXChatViewProvider {
       if (m.type === 'cleared') {
         stopSpeech();
         thread.innerHTML = '';
+        lastAssistantText = '';
         status.textContent = 'Session cleared';
       }
     });

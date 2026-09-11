@@ -131,12 +131,14 @@ response so you can verify the extension and routing.
 
 ## Hear responses aloud
 
-Each assistant response in the CopilotX sidebar has a **Hear aloud** button.
-It uses the VS Code webview's built-in browser speech synthesis support, so the
-response stays local and no speech service or additional API key is required.
-Click **Stop** to interrupt playback. The control is available when the host
-environment exposes `speechSynthesis`; otherwise the sidebar reports that
-text-to-speech is unavailable.
+Every assistant response in the CopilotX sidebar has a **Hear aloud** button,
+and the chat footer has a persistent **speaker symbol** that reads the most
+recent response aloud — click it again (it turns into a stop square) to stop
+playback. Both use the VS Code webview's built-in browser speech synthesis, so
+the response stays local and no speech service or additional API key is
+required. The controls are available when the host environment exposes
+`speechSynthesis`; otherwise the sidebar reports that text-to-speech is
+unavailable.
 
 ## Live model (optional)
 
