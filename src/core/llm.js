@@ -211,28 +211,41 @@ async function* sseEvents(res, { idleTimeoutMs } = {}) {
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-  for (;;) {
-    const { done, value } = await readWithIdleTimeout(reader, idleTimeoutMs);
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    buffer = buffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    let idx;
-    while ((idx = buffer.indexOf('\n\n')) !== -1) {
-      const rawEvent = buffer.slice(0, idx);
-      buffer = buffer.slice(idx + 2);
-      const dataLines = rawEvent
+  try {
+    for (;;) {
+      const { done, value } = await readWithIdleTimeout(reader, idleTimeoutMs);
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      // Normalize CRLF and bare CR, but defer a lone trailing \r until the
+      // next chunk arrives so a \r\n pair split across two chunks is not
+      // prematurely broken into two \n characters.
+      const holdCR = buffer.endsWith('\r');
+      const safe = holdCR ? buffer.slice(0, -1) : buffer;
+      const normalized = safe.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      buffer = holdCR ? normalized + '\r' : normalized;
+      let idx;
+      while ((idx = buffer.indexOf('\n\n')) !== -1) {
+        const rawEvent = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        const dataLines = rawEvent
+          .split('\n')
+          .filter((line) => line.startsWith('data:'))
+          .map((line) => line.slice(5).trim());
+        if (dataLines.length) yield dataLines.join('\n');
+      }
+    }
+    if (buffer.trim()) {
+      const dataLines = buffer
+        .replace(/\r\n/g, '\n').replace(/\r/g, '\n')
         .split('\n')
         .filter((line) => line.startsWith('data:'))
         .map((line) => line.slice(5).trim());
       if (dataLines.length) yield dataLines.join('\n');
     }
-  }
-  if (buffer.trim()) {
-    const dataLines = buffer
-      .split('\n')
-      .filter((line) => line.startsWith('data:'))
-      .map((line) => line.slice(5).trim());
-    if (dataLines.length) yield dataLines.join('\n');
+  } finally {
+    // Always release the reader so the HTTP connection is not left locked
+    // when the generator exits via timeout, abort, or normal completion.
+    if (typeof reader.cancel === 'function') reader.cancel().catch(() => {});
   }
 }
 
