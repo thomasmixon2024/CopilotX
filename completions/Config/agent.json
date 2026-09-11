@@ -1,8 +1,0 @@
-{
-  "agents": {
-    "ask": { "capabilities": ["interpretIntent"] },
-    "explore": { "capabilities": ["generateAlternatives"] },
-    "plan": { "capabilities": ["sequenceWork"] },
-    "custom": { "capabilities": ["runCustomLogic"] }
-  }
-}
