@@ -52,6 +52,7 @@ function formatWorkspaceBlock(snapshot) {
   }
 
   lines.push('=== END WORKSPACE ===');
+  if (lines.length <= 2) return '';
   return lines.join('\n');
 }
 

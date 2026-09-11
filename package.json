@@ -5,13 +5,17 @@
   "version": "0.1.0",
   "publisher": "local",
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.90.0",
+    "node": ">=18"
   },
   "categories": ["Machine Learning", "Other"],
   "activationEvents": [
     "onStartupFinished"
   ],
   "main": "./src/extension.js",
+  "scripts": {
+    "test": "node --test tests/"
+  },
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -48,6 +52,10 @@
       {
         "command": "copilotx.clearSession",
         "title": "CopilotX: Clear Chat Session"
+      },
+      {
+        "command": "copilotx.storeApiKey",
+        "title": "CopilotX: Store API Key"
       }
     ],
     "menus": {
@@ -67,7 +75,8 @@
         { "command": "copilotx.openChat" },
         { "command": "copilotx.explainSelection" },
         { "command": "copilotx.fixSelection" },
-        { "command": "copilotx.clearSession" }
+        { "command": "copilotx.clearSession" },
+        { "command": "copilotx.storeApiKey" }
       ]
     },
     "keybindings": [
@@ -84,12 +93,12 @@
           "type": "string",
           "enum": ["none", "local", "anthropic", "openai", "nim"],
           "default": "none",
-          "description": "LLM provider. 'none' uses the local deterministic engine; 'nim' uses NVIDIA NIM's OpenAI-compatible API."
+          "description": "LLM provider. 'none' uses the offline deterministic engine; 'local' uses an OpenAI-compatible server on http://127.0.0.1:8082/v1; 'nim' uses NVIDIA NIM's OpenAI-compatible API."
         },
         "copilotx.apiKey": {
           "type": "string",
           "default": "",
-          "description": "API key for the selected provider. You can also set ANTHROPIC_API_KEY or OPENAI_API_KEY in the environment."
+          "description": "API key for the selected provider. Prefer storing it with the 'CopilotX: Store API Key' command (SecretStorage) or in ANTHROPIC_API_KEY / OPENAI_API_KEY in the environment."
         },
         "copilotx.model": {
           "type": "string",

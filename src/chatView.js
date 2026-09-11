@@ -11,6 +11,7 @@ class CopilotXChatViewProvider {
     this.view = undefined;
     this.session = createSession('vscode-sidebar');
     this.history = [];
+    this.pending = false;
   }
 
   resolveWebviewView(webviewView) {
@@ -39,6 +40,15 @@ class CopilotXChatViewProvider {
   async handleUserMessage(text, extraPrefix = '') {
     const input = `${extraPrefix}${text}`.trim();
     if (!input) return;
+
+    if (this.pending) {
+      this.view?.webview.postMessage({
+        type: 'status',
+        text: 'Still answering the previous message — please wait.',
+      });
+      return;
+    }
+    this.pending = true;
 
     this.history.push({ role: 'user', text: input });
     this.view?.webview.postMessage({ type: 'user', text: input });
@@ -73,6 +83,8 @@ class CopilotXChatViewProvider {
         reason: '',
         text: String(err.message || err),
       });
+    } finally {
+      this.pending = false;
     }
   }
 

@@ -2,8 +2,10 @@
 
 /**
  * Optional live-model backend.
- * provider: none | anthropic | openai | nim
+ * provider: none | local | anthropic | openai | nim
  */
+const REQUEST_TIMEOUT_MS = 30000;
+
 async function complete({
   provider,
   apiKey,
@@ -27,6 +29,7 @@ async function complete({
     const res = await fetch(`${base}/messages`, {
       method: 'POST',
       headers,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       body: JSON.stringify({
         model: selectedModel,
         max_tokens: 2048,
@@ -70,6 +73,7 @@ async function complete({
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
       },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       body: JSON.stringify({
         model: model || 'claude-sonnet-4-5',
         max_tokens: 2048,
@@ -107,6 +111,7 @@ async function complete({
         'content-type': 'application/json',
         authorization: `Bearer ${apiKey}`,
       },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       body: JSON.stringify({
         model: model || (provider === 'nim' ? 'meta/llama-3.1-8b-instruct' : 'gpt-4o'),
         messages: messages || [

@@ -3,6 +3,9 @@
 const fs = require('fs');
 const path = require('path');
 
+const MAX_FILE_BYTES = 100 * 1024;
+const MAX_LINES = 2000;
+
 const TOOL_DEFINITIONS = [
   {
     name: 'read_file',
@@ -69,8 +72,21 @@ function readFile(input, workspace) {
   const stat = fs.statSync(filePath);
   if (!stat.isFile()) throw new Error('Path is not a file.');
 
-  const content = fs.readFileSync(filePath, 'utf8');
-  const lines = content.split(/\r?\n/);
+  const length = Math.min(stat.size, MAX_FILE_BYTES);
+  const fd = fs.openSync(filePath, 'r');
+  let buffer;
+  try {
+    buffer = Buffer.alloc(length);
+    fs.readSync(fd, buffer, 0, length, 0);
+  } finally {
+    fs.closeSync(fd);
+  }
+  const bytesTruncated = stat.size > MAX_FILE_BYTES;
+
+  const allLines = buffer.toString('utf8').split(/\r?\n/);
+  const linesTruncated = allLines.length > MAX_LINES;
+  const lines = linesTruncated ? allLines.slice(0, MAX_LINES) : allLines;
+
   const start = Number.isInteger(args.start_line) ? Math.max(1, args.start_line) : 1;
   const end = Number.isInteger(args.end_line)
     ? Math.min(lines.length, Math.max(start, args.end_line))
@@ -79,6 +95,8 @@ function readFile(input, workspace) {
     path: filePath,
     start_line: start,
     end_line: end,
+    total_lines: allLines.length,
+    truncated: bytesTruncated || linesTruncated,
     content: lines.slice(start - 1, end).join('\n'),
   };
 }

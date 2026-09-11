@@ -58,7 +58,11 @@ async function runTurn({ input, session, workspace, settings }) {
       });
       mode = live.mode;
       if (!live.toolCalls || !live.toolCalls.length) {
-        text = live.text;
+        if (live.mode === 'live' && !(live.text && live.text.trim())) {
+          text = `**${persona.name}** returned an empty response from the model. Try again or adjust the prompt.`;
+        } else {
+          text = live.text;
+        }
         break;
       }
 

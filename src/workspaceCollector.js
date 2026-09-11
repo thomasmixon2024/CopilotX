@@ -4,6 +4,17 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 
+let secretApiKey = '';
+
+async function initSecrets(secrets) {
+  if (!secrets) return;
+  try {
+    secretApiKey = (await secrets.get('copilotx.apiKey')) || '';
+  } catch {
+    secretApiKey = '';
+  }
+}
+
 function getActiveFileSnapshot(editor) {
   if (!editor || !editor.document) return null;
   const doc = editor.document;
@@ -114,22 +125,23 @@ function collectWorkspaceSnapshot() {
 
 function getSettings() {
   const cfg = vscode.workspace.getConfiguration('copilotx');
-  const configuredProvider = process.env.COPILOTX_PROVIDER || cfg.get('provider') || '';
-  const provider = configuredProvider === 'none' || !configuredProvider ? 'local' : configuredProvider;
+  const provider = process.env.COPILOTX_PROVIDER || cfg.get('provider') || 'none';
   return {
     provider,
     apiKey:
-      cfg.get('apiKey') ||
       (provider === 'nim' ? process.env.NVIDIA_NIM_API_KEY : '') ||
       (provider === 'local' ? process.env.ANTHROPIC_AUTH_TOKEN || '' : '') ||
+      secretApiKey ||
+      cfg.get('apiKey') ||
       '',
     model: process.env.COPILOTX_MODEL || cfg.get('model') || '',
     openaiBaseUrl:
       process.env.COPILOTX_BASE_URL ||
-      (provider === 'local' ? 'http://127.0.0.1:8082/v1' : cfg.get('openaiBaseUrl')) ||
-      (provider === 'local' ? 'http://127.0.0.1:8082/v1' : 'https://api.openai.com/v1'),
+      (provider === 'local'
+        ? 'http://127.0.0.1:8082/v1'
+        : cfg.get('openaiBaseUrl') || 'https://api.openai.com/v1'),
     includeWorkspace: cfg.get('includeWorkspace') !== false,
   };
 }
 
-module.exports = { collectWorkspaceSnapshot, getSettings };
+module.exports = { collectWorkspaceSnapshot, getSettings, initSecrets };

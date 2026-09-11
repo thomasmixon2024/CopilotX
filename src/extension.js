@@ -4,9 +4,11 @@ const vscode = require('vscode');
 const { CopilotXChatViewProvider } = require('./chatView');
 const { runTurn } = require('./core/engine');
 const { createSession, appendTurn } = require('./core/session');
-const { collectWorkspaceSnapshot, getSettings } = require('./workspaceCollector');
+const { collectWorkspaceSnapshot, getSettings, initSecrets } = require('./workspaceCollector');
 
 function activate(context) {
+  initSecrets(context.secrets);
+
   const provider = new CopilotXChatViewProvider(context.extensionUri);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider('copilotx.chatView', provider, {
@@ -15,11 +17,18 @@ function activate(context) {
   );
 
   let chatSession = createSession('vscode-chat-api');
+  let participantBusy = false;
 
   if (vscode.chat && typeof vscode.chat.createChatParticipant === 'function') {
     const participant = vscode.chat.createChatParticipant(
       'copilotx.agent',
-      async (request, _ctx, stream, _token) => {
+      async (request, _ctx, stream, token) => {
+        if (token && token.isCancellationRequested) return;
+        if (participantBusy) {
+          stream.markdown('CopilotX is still answering the previous message — please wait.');
+          return;
+        }
+        participantBusy = true;
         stream.progress('Routing CopilotX agents…');
         try {
           const result = await runTurn({
@@ -28,6 +37,7 @@ function activate(context) {
             workspace: collectWorkspaceSnapshot(),
             settings: getSettings(),
           });
+          if (token && token.isCancellationRequested) return;
           chatSession = appendTurn(chatSession, {
             input: request.prompt,
             agent: result.agent,
@@ -38,6 +48,8 @@ function activate(context) {
           stream.markdown(result.text);
         } catch (err) {
           stream.markdown(`CopilotX error: ${err.message}`);
+        } finally {
+          participantBusy = false;
         }
       }
     );
@@ -53,6 +65,16 @@ function activate(context) {
       provider.clear();
       chatSession = createSession('vscode-chat-api');
       vscode.window.showInformationMessage('CopilotX session cleared.');
+    }),
+    vscode.commands.registerCommand('copilotx.storeApiKey', async () => {
+      const key = await vscode.window.showInputBox({
+        prompt: 'Paste the API key for the selected provider (stored in VS Code SecretStorage, not settings).',
+        password: true,
+      });
+      if (!key) return;
+      await context.secrets.store('copilotx.apiKey', key);
+      await initSecrets(context.secrets);
+      vscode.window.showInformationMessage('CopilotX API key stored securely.');
     }),
     vscode.commands.registerCommand('copilotx.explainSelection', async () => {
       await vscode.commands.executeCommand('copilotx.chatView.focus');

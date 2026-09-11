@@ -89,6 +89,11 @@ $env:NVIDIA_NIM_API_KEY = "your-key-here"
 Restart VS Code after changing an environment variable. Never share the key
 in screenshots, chat messages, or source control.
 
+The safest option is the **CopilotX: Store API Key** command from the Command
+Palette: it stores the key in VS Code's SecretStorage (OS keychain), which
+never touches `settings.json` or Git. Keys stored this way take precedence
+over `copilotx.apiKey`; environment variables take precedence over both.
+
 ### 4. Start the extension
 
 1. Open the CopilotX project folder in VS Code.
@@ -135,10 +140,16 @@ Settings (`Ctrl+,` → CopilotX):
 
 | Setting | Example |
 |---|---|
-| `copilotx.provider` | `none`/`local` for the local FCC server, or `anthropic`, `openai`, or `nim` |
-| `copilotx.apiKey` | your key |
+| `copilotx.provider` | `none` (offline), `local`, `anthropic`, `openai`, or `nim` |
+| `copilotx.apiKey` | your key (prefer the **CopilotX: Store API Key** command) |
 | `copilotx.model` | `claude-sonnet-4-5` or `gpt-4o` |
 | `copilotx.openaiBaseUrl` | `https://api.openai.com/v1` (or a proxy) |
+
+`local` points CopilotX at an OpenAI-compatible server on your machine
+(default `http://127.0.0.1:8082/v1`). When no model is specified, CopilotX
+probes the server's `/models` endpoint and picks an available instruct/chat
+model; an explicit `copilotx.model` is always sent unchanged. No API key is
+required for `local` unless your server enforces one.
 
 For NVIDIA NIM, set `copilotx.provider` to `nim`, use an NVIDIA API key, set
 `copilotx.openaiBaseUrl` to `https://integrate.api.nvidia.com/v1` (or your
@@ -153,17 +164,16 @@ Extension Development Host. The included launch profile reads that variable
 without storing the key in the workspace.
 
 Without a key the router still works; replies are a structured local template.
-When the provider is `none` (the default), CopilotX probes the local FCC server
-at `http://127.0.0.1:8082/v1`, selects an available model when no model is
-specified, and uses the deterministic template only when that server is
-unavailable. An explicit `copilotx.model` is always sent unchanged.
+`none` (the default) is fully offline — it never touches the network and always
+uses the deterministic engine. Choose `local` explicitly if you want a
+model on `http://127.0.0.1:8082/v1`.
 
 ## Package as a `.vsix`
 
 ```bash
 npm install -g @vscode/vsce
-cd copilotx-vscode
-vsce package --allow-missing-repository
+npm test
+vsce package
 ```
 
 Then in VS Code: **Extensions → … → Install from VSIX**.
@@ -195,21 +205,12 @@ be added in `src/core/tools.js` without changing the provider adapters.
 ## Layout
 
 ```
-copilotx-vscode/
-  package.json          # contribution points, chat participant, view
+  package.json          # contribution points, chat participant, view, test script
   config/               # router + personas
   src/extension.js      # activate, commands, Chat API
   src/chatView.js       # sidebar webview
   src/workspaceCollector.js
-  src/core/             # router, session, workspace, llm, engine
+  src/core/             # router, session, workspace, llm, engine, tools
+  tests/                # zero-dependency node:test suite (npm test)
   media/icon.svg
 ```
-
-## Difference from the GitHub reference
-
-| Reference CopilotX | This extension |
-|---|---|
-| Input box + Output Channel | Sidebar chat thread |
-| Incomplete shipped tree (missing Agents/, logger, paths) | Self-contained, runs from F5 |
-| Claude-only live path | Anthropic **or** OpenAI-compatible |
-| PowerShell + Node dual runtime | VS Code first |
