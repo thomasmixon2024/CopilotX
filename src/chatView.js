@@ -146,18 +146,33 @@ class CopilotXChatViewProvider {
     content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';" />
   <style>
     :root {
-      --bg: var(--vscode-sideBar-background);
-      --fg: var(--vscode-foreground);
-      --muted: var(--vscode-descriptionForeground);
-      --input: var(--vscode-input-background);
-      --border: var(--vscode-widget-border, #444);
-      --accent: var(--vscode-button-background);
-      --accent-fg: var(--vscode-button-foreground);
-      --bubble: var(--vscode-editor-background);
+      /* Fixed VS Code Dark Modern-style palette */
+      --bg: #181818;
+      --fg: #cccccc;
+      --muted: #9d9d9d;
+      --input: #313131;
+      --input-border: #3c3c3c;
+      --border: #2b2b2b;
+      --border-strong: #454545;
+      --accent: #0078d4;
+      --accent-hover: #026ec1;
+      --accent-fg: #ffffff;
+      --bubble: #1f1f1f;
+      --green: #3fb950;
+      --red: #f85149;
+      --selection: #264f78;
+      --hover-overlay: rgba(255, 255, 255, 0.08);
+      --scrollbar-thumb: rgba(121, 121, 121, 0.4);
+      --scrollbar-thumb-hover: rgba(100, 100, 100, 0.7);
     }
+    ::selection { background: var(--selection); color: #ffffff; }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 5px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
     html, body { height: 100%; margin: 0; }
     body {
-      font-family: var(--vscode-font-family);
+      font-family: var(--vscode-font-family, -apple-system, 'Segoe UI', Ubuntu, sans-serif);
       font-size: 13px;
       color: var(--fg);
       background: var(--bg);
@@ -201,7 +216,7 @@ class CopilotXChatViewProvider {
       padding: 3px 7px;
       font-size: 11px;
     }
-    .speak:hover { color: var(--fg); }
+    .speak:hover { color: var(--fg); background: var(--hover-overlay); }
     .icon-btn {
       background: transparent;
       color: var(--fg);
@@ -213,7 +228,7 @@ class CopilotXChatViewProvider {
       align-items: center;
       justify-content: center;
     }
-    .icon-btn:hover { border-color: var(--accent); color: var(--accent-fg); }
+    .icon-btn:hover { border-color: var(--accent); }
     .icon-btn.speaking { color: var(--accent-fg); border-color: var(--accent); background: var(--accent); }
     .msg.user .bubble { border-left: 3px solid var(--accent); }
     .msg.assistant .bubble { border-left: 3px solid #6c8cff; }
@@ -228,14 +243,15 @@ class CopilotXChatViewProvider {
     }
     .proposal .path { font-family: var(--vscode-editor-font-family, monospace); font-size: 12px; word-break: break-all; }
     .proposal .stats { font-size: 11px; }
-    .proposal .stats .add { color: var(--vscode-testing-iconPassed, #3fb950); }
-    .proposal .stats .del { color: var(--vscode-testing-iconFailed, #f85149); }
+    .proposal .stats .add { color: var(--green); }
+    .proposal .stats .del { color: var(--red); }
     .proposal .row { display: flex; gap: 6px; }
     .proposal button { padding: 4px 10px; font-size: 11px; border-radius: 5px; cursor: pointer; }
     .proposal .accept { background: var(--accent); color: var(--accent-fg); border: 0; }
     .proposal .review, .proposal .discard {
       background: transparent; color: var(--fg); border: 1px solid var(--border);
     }
+    .proposal .review:hover, .proposal .discard:hover { background: var(--hover-overlay); }
     .proposal .done { font-size: 11px; color: var(--muted); }
     footer {
       display: flex;
@@ -250,11 +266,15 @@ class CopilotXChatViewProvider {
       max-height: 140px;
       background: var(--input);
       color: var(--fg);
-      border: 1px solid var(--border);
+      border: 1px solid var(--input-border);
       border-radius: 6px;
       padding: 8px;
       font: inherit;
+      outline: none;
+      transition: border-color 0.1s ease;
     }
+    textarea::placeholder { color: var(--muted); }
+    textarea:focus { border-color: var(--accent); }
     button {
       background: var(--accent);
       color: var(--accent-fg);
@@ -262,12 +282,15 @@ class CopilotXChatViewProvider {
       border-radius: 6px;
       padding: 0 12px;
       cursor: pointer;
+      transition: background 0.1s ease;
     }
+    button:hover { background: var(--accent-hover); }
     button.ghost {
       background: transparent;
       color: var(--fg);
       border: 1px solid var(--border);
     }
+    button.ghost:hover { background: var(--hover-overlay); }
     #status { padding: 0 12px 8px; color: var(--muted); font-size: 11px; min-height: 16px; }
   </style>
 </head>

@@ -10,6 +10,7 @@ turns that idea into a real sidebar chat + official Chat participant.
 ## What you get
 
 - Activity-bar **CopilotX** icon and persistent **Chat** sidebar
+- Sidebar UI in a fixed **VS Code Dark Modern-style dark theme** (consistent regardless of editor theme)
 - Intent router: keyword match → Ask, Explore, Plan, or Custom
 - `@workspace` context: active file, selection, cursor, open tabs, project tree
 - Multi-turn session memory in the sidebar
