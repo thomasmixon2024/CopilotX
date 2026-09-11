@@ -38,3 +38,7 @@ Owns:
 
 - Stream 2 works on `feature/multi-agent-pipeline` and pushes the branch; merge to `main` happens after Stream 1's Phase 2 patches land, resolving any conflict in the small hook regions.
 - Both streams keep all changes additive wherever possible to minimize conflicts.
+
+## Status log
+
+- 2026-09-11: Stream 1's stress/patch work landed on `main` (`82de787`, 16 patches + stress/replay suite). Stream 2 merged `origin/main` into `feature/multi-agent-pipeline` (`9762a54`) with zero textual conflicts; combined suite 106/106 green. Stream 1's `streamComplete` gained optional `stallTimeoutMs` (backward-compatible — pipeline.js required no changes). Webview replay path (Stream 1) and pipeline status card (Stream 2) coexist in `src/chatView.js`. Streams merged to `main` afterward.
