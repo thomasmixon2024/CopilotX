@@ -70,31 +70,26 @@ test('read_file follows an in-workspace symlink but blocks symlink escapes', () 
   const target = path.join(tmpRoot, 'real.txt');
   const link = path.join(tmpRoot, 'link.txt');
   fs.writeFileSync(target, 'symlink content\n', 'utf8');
-  let created = false;
   try {
     fs.symlinkSync(target, link, 'file');
-    created = true;
   } catch {
     return; // Windows without symlink privilege: skip this test
   }
-  if (created) {
-    const inside = executeToolCall({ name: 'read_file', input: { path: 'link.txt' } }, workspace);
-    assert.ok(inside.content.includes('symlink content'));
-    fs.rmSync(link, { force: true });
 
-    const outsideTarget = path.join(path.dirname(tmpRoot), 'escape-target.txt');
-    fs.writeFileSync(outsideTarget, 'outside', 'utf8');
-    try {
-      fs.symlinkSync(outsideTarget, link, 'file');
-      assert.throws(
-        () => executeToolCall({ name: 'read_file', input: { path: 'link.txt' } }, workspace),
-        /outside the current workspace/
-      );
-    } catch {
-      // symlink creation failed (privilege); nothing more to assert
-    } finally {
-      fs.rmSync(link, { force: true });
-      fs.rmSync(outsideTarget, { force: true });
-    }
+  const inside = executeToolCall({ name: 'read_file', input: { path: 'link.txt' } }, workspace);
+  assert.ok(inside.content.includes('symlink content'));
+  fs.rmSync(link, { force: true });
+
+  const outsideTarget = path.join(path.dirname(tmpRoot), 'escape-target.txt');
+  fs.writeFileSync(outsideTarget, 'outside', 'utf8');
+  try {
+    fs.symlinkSync(outsideTarget, link, 'file');
+    assert.throws(
+      () => executeToolCall({ name: 'read_file', input: { path: 'link.txt' } }, workspace),
+      /outside the current workspace/
+    );
+  } finally {
+    fs.rmSync(link, { force: true });
+    fs.rmSync(outsideTarget, { force: true });
   }
 });

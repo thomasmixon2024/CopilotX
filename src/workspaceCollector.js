@@ -123,17 +123,18 @@ function collectWorkspaceSnapshot() {
   };
 }
 
+const PROVIDER_ENV_KEYS = {
+  nim: 'NVIDIA_NIM_API_KEY',
+  local: 'ANTHROPIC_AUTH_TOKEN',
+};
+
 function getSettings() {
   const cfg = vscode.workspace.getConfiguration('copilotx');
   const provider = process.env.COPILOTX_PROVIDER || cfg.get('provider') || 'none';
+  const providerEnvKey = PROVIDER_ENV_KEYS[provider] || '';
   return {
     provider,
-    apiKey:
-      (provider === 'nim' ? process.env.NVIDIA_NIM_API_KEY : '') ||
-      (provider === 'local' ? process.env.ANTHROPIC_AUTH_TOKEN || '' : '') ||
-      secretApiKey ||
-      cfg.get('apiKey') ||
-      '',
+    apiKey: process.env[providerEnvKey] || secretApiKey || cfg.get('apiKey') || '',
     model: process.env.COPILOTX_MODEL || cfg.get('model') || '',
     openaiBaseUrl:
       process.env.COPILOTX_BASE_URL ||
