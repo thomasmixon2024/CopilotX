@@ -30,6 +30,8 @@ Owns:
 - `src/chatView.js` (additive rendering only)
 - `src/workspaceCollector.js` (additive settings fields only)
 - `package.json` (additive `copilotx.pipeline.*` configuration properties only)
+- `container/` (headless runtime: `runtime.js`, `settings.js`, `snapshot.js`, `git.js`, `Dockerfile`, `README.md`; branch `feature/container-runtime`)
+- `.dockerignore` (root)
 
 **Hands off for Stream 2:** `src/core/llm.js`, `src/core/engine.js`,
 `src/core/tools.js`, and all pre-existing files under `tests/`.
@@ -42,3 +44,4 @@ Owns:
 ## Status log
 
 - 2026-09-11: Stream 1's stress/patch work landed on `main` (`82de787`, 16 patches + stress/replay suite). Stream 2 merged `origin/main` into `feature/multi-agent-pipeline` (`9762a54`) with zero textual conflicts; combined suite 106/106 green. Stream 1's `streamComplete` gained optional `stallTimeoutMs` (backward-compatible — pipeline.js required no changes). Webview replay path (Stream 1) and pipeline status card (Stream 2) coexist in `src/chatView.js`. Streams merged to `main` afterward.
+- 2026-09-11: Stream 2 added the headless container runtime (`container/`, branch `feature/container-runtime`): `container/runtime.js` runs the pipeline against any repo checkout; `branch` mode applies proposals to a `pipeline/run-<id>` branch (git is the approval gate), `dry` mode writes patches only. Coordination protocol: the runtime reads this file for stream boundaries, works only on its own run branch, and leaves a `REPORT.md` per run under `container/runs/`.

@@ -8,13 +8,17 @@
     "vscode": "^1.90.0",
     "node": ">=18"
   },
-  "categories": ["Machine Learning", "Other"],
+  "categories": [
+    "Machine Learning",
+    "Other"
+  ],
   "activationEvents": [
     "onStartupFinished"
   ],
   "main": "./src/extension.js",
   "scripts": {
-    "test": "node --test tests/"
+    "test": "node --test tests/",
+    "pipeline": "node container/runtime.js"
   },
   "contributes": {
     "viewsContainers": {
@@ -76,12 +80,24 @@
         }
       ],
       "commandPalette": [
-        { "command": "copilotx.openChat" },
-        { "command": "copilotx.explainSelection" },
-        { "command": "copilotx.fixSelection" },
-        { "command": "copilotx.clearSession" },
-        { "command": "copilotx.storeApiKey" },
-        { "command": "copilotx.stopGeneration" }
+        {
+          "command": "copilotx.openChat"
+        },
+        {
+          "command": "copilotx.explainSelection"
+        },
+        {
+          "command": "copilotx.fixSelection"
+        },
+        {
+          "command": "copilotx.clearSession"
+        },
+        {
+          "command": "copilotx.storeApiKey"
+        },
+        {
+          "command": "copilotx.stopGeneration"
+        }
       ]
     },
     "keybindings": [
@@ -96,7 +112,13 @@
       "properties": {
         "copilotx.provider": {
           "type": "string",
-          "enum": ["none", "local", "anthropic", "openai", "nim"],
+          "enum": [
+            "none",
+            "local",
+            "anthropic",
+            "openai",
+            "nim"
+          ],
           "default": "none",
           "description": "LLM provider. 'none' uses the offline deterministic engine; 'local' uses an OpenAI-compatible server on http://127.0.0.1:8082/v1; 'nim' uses NVIDIA NIM's OpenAI-compatible API."
         },
@@ -122,7 +144,11 @@
         },
         "copilotx.allowWrites": {
           "type": "string",
-          "enum": ["off", "approval", "auto"],
+          "enum": [
+            "off",
+            "approval",
+            "auto"
+          ],
           "default": "approval",
           "description": "File-edit tools. 'off' hides write tools from the model; 'approval' shows a diff you must Accept; 'auto' applies changes immediately and opens the diff."
         },
