@@ -5,14 +5,27 @@ const fs = require('fs');
 const path = require('path');
 
 let secretApiKey = '';
+let secretsReadyPromise = Promise.resolve();
 
 async function initSecrets(secrets) {
   if (!secrets) return;
-  try {
-    secretApiKey = (await secrets.get('copilotx.apiKey')) || '';
-  } catch {
-    secretApiKey = '';
-  }
+  const load = (async () => {
+    try {
+      return (await secrets.get('copilotx.apiKey')) || '';
+    } catch {
+      return '';
+    }
+  })();
+  secretsReadyPromise = load.then((value) => {
+    secretApiKey = value;
+  });
+  await secretsReadyPromise;
+}
+
+// Resolves once SecretStorage has been read (or immediately if never used),
+// so the first turn never runs with an unloaded key.
+function ensureSecretsReady() {
+  return secretsReadyPromise;
 }
 
 function getActiveFileSnapshot(editor) {
@@ -163,4 +176,4 @@ function getSettings() {
   };
 }
 
-module.exports = { collectWorkspaceSnapshot, getSettings, initSecrets };
+module.exports = { collectWorkspaceSnapshot, getSettings, initSecrets, ensureSecretsReady };

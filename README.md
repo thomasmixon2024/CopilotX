@@ -139,7 +139,8 @@ playback. Both use the VS Code webview's built-in browser speech synthesis, so
 the response stays local and no speech service or additional API key is
 required. The controls are available when the host environment exposes
 `speechSynthesis`; otherwise the sidebar reports that text-to-speech is
-unavailable.
+unavailable. Utterances are capped at roughly 30,000 characters — some
+browser TTS engines silently skip longer text.
 
 ## Live model (optional)
 
@@ -157,6 +158,14 @@ Settings (`Ctrl+,` → CopilotX):
 probes the server's `/models` endpoint and picks an available instruct/chat
 model; an explicit `copilotx.model` is always sent unchanged. No API key is
 required for `local` unless your server enforces one.
+
+Known limitations of the `local` provider: responses are fetched in one piece
+(non-streaming), so the sidebar shows the full answer only when the model
+finishes; the Stop button cannot interrupt a turn mid-generation.
+
+Tool paths are workspace-relative and resolve against the **first workspace
+folder**. Multi-root workspaces should keep the files CopilotX reads or
+proposes inside root 1.
 
 For NVIDIA NIM, set `copilotx.provider` to `nim`, use an NVIDIA API key, set
 `copilotx.openaiBaseUrl` to `https://integrate.api.nvidia.com/v1` (or your

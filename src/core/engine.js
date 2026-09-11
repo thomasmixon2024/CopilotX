@@ -50,7 +50,8 @@ async function runTurn({ input, session, workspace, settings, onDelta, signal })
         { role: 'user', content: userParts.join('\n\n') },
       ];
   try {
-    for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
+    let completed = false;
+    for (let round = 0; round < MAX_TOOL_ROUNDS && !completed; round += 1) {
       const requestArgs = {
         provider: settings.provider,
         apiKey,
@@ -72,6 +73,7 @@ async function runTurn({ input, session, workspace, settings, onDelta, signal })
         } else {
           text = live.text;
         }
+        completed = true;
         break;
       }
 
@@ -106,7 +108,7 @@ async function runTurn({ input, session, workspace, settings, onDelta, signal })
           }
         } else {
           try {
-            result = executeToolCall(call, workspace);
+            result = await executeToolCall(call, workspace);
           } catch (err) {
             result = { error: err.message };
           }
@@ -128,13 +130,30 @@ async function runTurn({ input, session, workspace, settings, onDelta, signal })
           });
         }
       }
-      if (round === MAX_TOOL_ROUNDS - 1) {
-        throw new Error('Tool-call limit reached before the model produced a final answer.');
-      }
+    }
+    if (!completed) {
+      mode = 'live';
+      text =
+        `**${persona.name}** reached the tool-call limit (${MAX_TOOL_ROUNDS} rounds) without a final answer. ` +
+        'The tools kept returning results; ask me to continue and I will pick up where this turn stopped.';
     }
   } catch (err) {
-    if (err && (err.name === 'AbortError' || err.code === 'ABORT_ERR') && text) {
+    const isAbort = err && (err.name === 'AbortError' || err.code === 'ABORT_ERR');
+    const isTimeout = err && err.name === 'TimeoutError';
+    if (isAbort) {
       mode = 'stopped';
+      if (!text) {
+        text = `**${persona.name}** was stopped before producing a final answer.`;
+      }
+    } else if (isTimeout) {
+      mode = 'timeout';
+      text = [
+        `**${persona.name}** timed out waiting for the model.`,
+        '',
+        `Error: \`${err.message}\``,
+        '',
+        'Increase the timeout or check the provider status, then retry.',
+      ].join('\n');
     } else {
       mode = 'fallback';
       text = [

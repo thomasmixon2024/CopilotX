@@ -5,7 +5,7 @@ const { runTurn } = require('./core/engine');
 const { runPipeline } = require('./core/pipeline');
 const { resolveAgent, loadRouterConfig } = require('./core/router');
 const { createSession, appendTurn } = require('./core/session');
-const { collectWorkspaceSnapshot, getSettings } = require('./workspaceCollector');
+const { collectWorkspaceSnapshot, getSettings, ensureSecretsReady } = require('./workspaceCollector');
 const proposalReview = require('./proposalReview');
 
 class CopilotXChatViewProvider {
@@ -51,8 +51,42 @@ class CopilotXChatViewProvider {
           this.abortController.abort();
           this.view?.webview.postMessage({ type: 'status', text: 'Stopping…' });
         }
+      } else if (msg.type === 'webviewReady') {
+        this._replayState();
       }
     });
+  }
+
+  // The webview may be destroyed (and its DOM wiped) whenever the sidebar is
+  // hidden; on reload it sends webviewReady and the host replays the thread.
+  _replayState() {
+    if (!this.view) return;
+    for (const entry of this.history) {
+      if (entry.role === 'user') {
+        this.view.webview.postMessage({ type: 'user', text: entry.text });
+      } else {
+        this.view.webview.postMessage({
+          type: 'assistant',
+          agent: entry.agentName,
+          mode: entry.mode,
+          reason: entry.reason,
+          text: entry.text,
+        });
+      }
+    }
+    const pendingProposals = proposalReview.listPendingProposals();
+    if (pendingProposals.length) {
+      this.view.webview.postMessage({
+        type: 'proposals',
+        items: pendingProposals.map((p) => ({
+          id: p.id,
+          path: p.relPath,
+          added: p.diff.added,
+          removed: p.diff.removed,
+          created: p.created,
+        })),
+      });
+    }
   }
 
   clear() {
@@ -64,6 +98,10 @@ class CopilotXChatViewProvider {
   async handleUserMessage(text, extraPrefix = '') {
     const input = `${extraPrefix}${text}`.trim();
     if (!input) return;
+
+    // Make sure SecretStorage has been read before the first turn so the
+    // stored API key is never missed by a fast first message.
+    await ensureSecretsReady();
 
     if (this.pending) {
       this.view?.webview.postMessage({
@@ -374,7 +412,9 @@ class CopilotXChatViewProvider {
         .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
         .replace(/[*_>#~-]/g, ' ')
         .replace(/\s+/g, ' ')
-        .trim();
+        .trim()
+        // Very long utterances silently fail on some TTS engines; cap at 30k chars.
+        .slice(0, 30000);
     }
 
     function stopSpeech() {
@@ -658,6 +698,10 @@ class CopilotXChatViewProvider {
         status.textContent = 'Session cleared';
       }
     });
+
+    // Ask the host to replay history and pending proposals after a reload;
+    // covers sidebar panels whose webview is destroyed when hidden.
+    vscode.postMessage({ type: 'webviewReady' });
   </script>
 </body>
 </html>`;

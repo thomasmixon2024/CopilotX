@@ -18,7 +18,7 @@ async function complete({
   timeoutMs,
   signal,
 }) {
-  const requestSignal = signal || AbortSignal.timeout(timeoutMs || REQUEST_TIMEOUT_MS);
+  const requestSignal = combineSignals(signal, timeoutMs || REQUEST_TIMEOUT_MS);
   if (provider === 'local') {
     const base = (openaiBaseUrl || 'http://127.0.0.1:8082/v1').replace(/\/$/, '');
     const headers = {
@@ -153,7 +153,7 @@ async function complete({
       mode: 'live',
       text: message.content || '',
       toolCalls,
-      assistantMessage: message,
+      assistantMessage: { ...message, role: message.role || 'assistant' },
     };
   }
 
@@ -168,17 +168,57 @@ function safeParseJson(raw, toolName) {
   }
 }
 
-async function* sseEvents(res) {
+function combineSignals(signal, timeoutMs) {
+  if (!signal && !timeoutMs) return undefined;
+  if (!timeoutMs) return signal || undefined;
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  if (!signal) return timeoutSignal;
+  if (typeof AbortSignal.any === 'function') {
+    return AbortSignal.any([signal, timeoutSignal]);
+  }
+  const controller = new AbortController();
+  if (signal.aborted) controller.abort(signal.reason);
+  else {
+    signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
+  }
+  timeoutSignal.addEventListener('abort', () => controller.abort(timeoutSignal.reason), {
+    once: true,
+  });
+  return controller.signal;
+}
+
+async function readWithIdleTimeout(reader, idleTimeoutMs) {
+  if (!idleTimeoutMs) return reader.read();
+  let timer;
+  try {
+    return await Promise.race([
+      reader.read(),
+      new Promise((_resolve, reject) => {
+        timer = setTimeout(() => {
+          const err = new Error('Stream stalled: no data received');
+          err.name = 'TimeoutError';
+          reject(err);
+        }, idleTimeoutMs);
+        if (typeof timer.unref === 'function') timer.unref();
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function* sseEvents(res, { idleTimeoutMs } = {}) {
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
   for (;;) {
-    const { done, value } = await reader.read();
+    const { done, value } = await readWithIdleTimeout(reader, idleTimeoutMs);
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
+    buffer = buffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     let idx;
     while ((idx = buffer.indexOf('\n\n')) !== -1) {
-      const rawEvent = buffer.slice(0, idx).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      const rawEvent = buffer.slice(0, idx);
       buffer = buffer.slice(idx + 2);
       const dataLines = rawEvent
         .split('\n')
@@ -189,7 +229,6 @@ async function* sseEvents(res) {
   }
   if (buffer.trim()) {
     const dataLines = buffer
-      .replace(/\r\n/g, '\n')
       .split('\n')
       .filter((line) => line.startsWith('data:'))
       .map((line) => line.slice(5).trim());
@@ -197,11 +236,11 @@ async function* sseEvents(res) {
   }
 }
 
-async function streamAnthropic({ url, headers, body, onDelta, signal }) {
+async function streamAnthropic({ url, headers, body, onDelta, signal, stallTimeoutMs }) {
   const res = await fetch(url, {
     method: 'POST',
     headers,
-    signal,
+    signal: combineSignals(signal, stallTimeoutMs),
     body: JSON.stringify({ ...body, stream: true }),
   });
   if (!res.ok) {
@@ -212,7 +251,7 @@ async function streamAnthropic({ url, headers, body, onDelta, signal }) {
   let text = '';
   const blocks = [];
   let current = null;
-  for await (const data of sseEvents(res)) {
+  for await (const data of sseEvents(res, { idleTimeoutMs: stallTimeoutMs })) {
     if (data === '[DONE]') break;
     let evt;
     try {
@@ -242,19 +281,22 @@ async function streamAnthropic({ url, headers, body, onDelta, signal }) {
   const toolCalls = blocks
     .filter((b) => b.type === 'tool_use')
     .map((b) => ({ id: b.id, name: b.name, input: safeParseJson(b.input, b.name) }));
+  const messageBlocks = blocks.map((b) =>
+    b.type === 'tool_use' ? { ...b, input: safeParseJson(b.input, b.name) } : b
+  );
   return {
     mode: 'live',
     text,
     toolCalls,
-    assistantMessage: { role: 'assistant', content: blocks },
+    assistantMessage: { role: 'assistant', content: messageBlocks },
   };
 }
 
-async function streamOpenAI({ url, headers, body, onDelta, signal }) {
+async function streamOpenAI({ url, headers, body, onDelta, signal, stallTimeoutMs }) {
   const res = await fetch(url, {
     method: 'POST',
     headers,
-    signal,
+    signal: combineSignals(signal, stallTimeoutMs),
     body: JSON.stringify({ ...body, stream: true }),
   });
   if (!res.ok) {
@@ -264,7 +306,7 @@ async function streamOpenAI({ url, headers, body, onDelta, signal }) {
 
   let text = '';
   const toolMap = new Map();
-  for await (const data of sseEvents(res)) {
+  for await (const data of sseEvents(res, { idleTimeoutMs: stallTimeoutMs })) {
     if (data === '[DONE]') break;
     let evt;
     try {
@@ -279,6 +321,7 @@ async function streamOpenAI({ url, headers, body, onDelta, signal }) {
       if (onDelta) onDelta(delta.content);
     }
     for (const call of delta.tool_calls || []) {
+      if (!call || (call.id === undefined && !call.function)) continue;
       const index = typeof call.index === 'number' ? call.index : toolMap.size;
       if (!toolMap.has(index)) {
         toolMap.set(index, { id: `call-${index}`, name: '', input: '' });
@@ -318,7 +361,9 @@ async function streamComplete({
   tools,
   onDelta,
   signal,
+  stallTimeoutMs,
 }) {
+  const stall = stallTimeoutMs || 120000;
   if (provider === 'local' || !provider || provider === 'none' || !apiKey) {
     const result = await complete({
       provider,
@@ -357,6 +402,7 @@ async function streamComplete({
       },
       onDelta,
       signal,
+      stallTimeoutMs: stall,
     });
   }
 
@@ -388,6 +434,7 @@ async function streamComplete({
       },
       onDelta,
       signal,
+      stallTimeoutMs: stall,
     });
   }
 
