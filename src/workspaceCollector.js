@@ -128,6 +128,12 @@ const PROVIDER_ENV_KEYS = {
   local: 'ANTHROPIC_AUTH_TOKEN',
 };
 
+function clampInt(value, defaultValue, min, max) {
+  const n = Number(value);
+  if (Number.isNaN(n)) return defaultValue;
+  return Math.min(max, Math.max(min, Math.trunc(n)));
+}
+
 function getSettings() {
   const cfg = vscode.workspace.getConfiguration('copilotx');
   const provider = process.env.COPILOTX_PROVIDER || cfg.get('provider') || 'none';
@@ -147,6 +153,13 @@ function getSettings() {
       : 'approval',
     streamResponses: cfg.get('streamResponses') !== false,
     inlineCompletions: cfg.get('inlineCompletions') === true,
+    pipelineEnabled: cfg.get('pipeline.enabled') !== false,
+    pipelineMaxWorkers: clampInt(cfg.get('pipeline.maxWorkers'), 2, 1, 4),
+    pipelineMaxQcRounds: clampInt(cfg.get('pipeline.maxQcRounds'), 2, 1, 3),
+    supervisorModel:
+      process.env.COPILOTX_SUPERVISOR_MODEL || cfg.get('pipeline.supervisorModel') || '',
+    workerModel: process.env.COPILOTX_WORKER_MODEL || cfg.get('pipeline.workerModel') || '',
+    qcModel: process.env.COPILOTX_QC_MODEL || cfg.get('pipeline.qcModel') || '',
   };
 }
 

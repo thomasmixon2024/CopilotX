@@ -11,8 +11,16 @@ test('router.json loads with a routing object and default agent', () => {
   assert.strictEqual(cfg.defaultAgent, 'ask');
   assert.deepStrictEqual(
     Object.keys(cfg.routing).sort(),
-    ['ask', 'custom', 'explore', 'plan']
+    ['ask', 'custom', 'explore', 'pipeline', 'plan', 'qc', 'supervisor', 'worker']
   );
+});
+
+test('sentinel routes resolve without colliding with user vocabulary', () => {
+  assert.strictEqual(resolveAgent('x-worker do the task', cfg).agent, 'worker');
+  assert.strictEqual(resolveAgent('x-supervisor split the goal', cfg).agent, 'supervisor');
+  assert.strictEqual(resolveAgent('x-qc review the result', cfg).agent, 'qc');
+  // A plain user word like "supervise" must not hit the sentinel-only route.
+  assert.notStrictEqual(resolveAgent('supervise this effort', cfg).agent, 'supervisor');
 });
 
 test('clear keyword hit routes to that agent', () => {

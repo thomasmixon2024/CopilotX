@@ -13,6 +13,22 @@
       "intent": ["sequence", "workflow", "steps", "plan", "schedule", "roadmap", "order", "prioritize", "implement"],
       "description": "Structured planning"
     },
+    "pipeline": {
+      "intent": ["pipeline", "orchestrate", "delegate", "coordinate", "multi-agent", "parallelize", "supervise"],
+      "description": "Multi-agent pipeline: supervisor plans, parallel workers execute, QC verifies"
+    },
+    "supervisor": {
+      "intent": ["x-supervisor"],
+      "description": "internal sentinel route"
+    },
+    "worker": {
+      "intent": ["x-worker"],
+      "description": "internal sentinel route"
+    },
+    "qc": {
+      "intent": ["x-qc"],
+      "description": "internal sentinel route"
+    },
     "custom": {
       "intent": ["fix", "refactor", "patch", "generate", "write", "code", "implement", "create", "apply"],
       "description": "Code generation and execution-style tasks"

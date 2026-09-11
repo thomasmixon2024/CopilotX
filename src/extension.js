@@ -3,6 +3,8 @@
 const vscode = require('vscode');
 const { CopilotXChatViewProvider } = require('./chatView');
 const { runTurn } = require('./core/engine');
+const { runPipeline } = require('./core/pipeline');
+const { resolveAgent, loadRouterConfig } = require('./core/router');
 const { createSession, appendTurn } = require('./core/session');
 const { collectWorkspaceSnapshot, getSettings, initSecrets } = require('./workspaceCollector');
 const { registerProposalReview } = require('./proposalReview');
@@ -41,12 +43,23 @@ function activate(context) {
         participantBusy = true;
         stream.progress('Routing CopilotX agents…');
         try {
-          const result = await runTurn({
-            input: request.prompt,
-            session: chatSession,
-            workspace: collectWorkspaceSnapshot(),
-            settings: getSettings(),
-          });
+          const settings = getSettings();
+          const routed = resolveAgent(request.prompt, loadRouterConfig());
+          const result = await (
+            routed.agent === 'pipeline' && settings.pipelineEnabled !== false
+              ? runPipeline({
+                  input: request.prompt,
+                  session: chatSession,
+                  workspace: collectWorkspaceSnapshot(),
+                  settings,
+                })
+              : runTurn({
+                  input: request.prompt,
+                  session: chatSession,
+                  workspace: collectWorkspaceSnapshot(),
+                  settings,
+                })
+          );
           if (token && token.isCancellationRequested) return;
           chatSession = appendTurn(chatSession, {
             input: request.prompt,

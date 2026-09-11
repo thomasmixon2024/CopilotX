@@ -135,6 +135,40 @@
           "type": "boolean",
           "default": false,
           "description": "Enable Copilot-style ghost-text completions while typing. Requires a live provider (provider != none) with a valid API key."
+        },
+        "copilotx.pipeline.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the multi-agent pipeline; requests routed to the Pipeline agent get a supervisor plan, parallel workers, and QC verification."
+        },
+        "copilotx.pipeline.maxWorkers": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 4,
+          "description": "Maximum number of concurrent worker tasks the pipeline runs per plan."
+        },
+        "copilotx.pipeline.maxQcRounds": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 3,
+          "description": "Maximum QC fix-loop rounds per worker task before escalation."
+        },
+        "copilotx.pipeline.supervisorModel": {
+          "type": "string",
+          "default": "",
+          "description": "Optional model override for the supervisor pipeline role; empty inherits copilotx.model."
+        },
+        "copilotx.pipeline.workerModel": {
+          "type": "string",
+          "default": "",
+          "description": "Optional model override for the worker pipeline role; empty inherits copilotx.model."
+        },
+        "copilotx.pipeline.qcModel": {
+          "type": "string",
+          "default": "",
+          "description": "Optional model override for the QC pipeline role; empty inherits copilotx.model."
         }
       }
     },

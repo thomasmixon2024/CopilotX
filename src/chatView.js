@@ -2,6 +2,8 @@
 
 const vscode = require('vscode');
 const { runTurn } = require('./core/engine');
+const { runPipeline } = require('./core/pipeline');
+const { resolveAgent, loadRouterConfig } = require('./core/router');
 const { createSession, appendTurn } = require('./core/session');
 const { collectWorkspaceSnapshot, getSettings } = require('./workspaceCollector');
 const proposalReview = require('./proposalReview');
@@ -81,16 +83,31 @@ class CopilotXChatViewProvider {
     this.abortController = abortController;
 
     try {
-      const result = await runTurn({
-        input,
-        session: this.session,
-        workspace: collectWorkspaceSnapshot(),
-        settings: getSettings(),
-        onDelta: (chunk) => {
-          this.view?.webview.postMessage({ type: 'delta', text: chunk });
-        },
-        signal: abortController.signal,
-      });
+      const settings = getSettings();
+      const routed = resolveAgent(input, loadRouterConfig());
+      const result = await (
+        routed.agent === 'pipeline' && settings.pipelineEnabled !== false
+          ? runPipeline({
+              input,
+              session: this.session,
+              workspace: collectWorkspaceSnapshot(),
+              settings,
+              onDelta: (chunk) => {
+                this.view?.webview.postMessage({ type: 'delta', text: chunk });
+              },
+              signal: abortController.signal,
+            })
+          : runTurn({
+              input,
+              session: this.session,
+              workspace: collectWorkspaceSnapshot(),
+              settings,
+              onDelta: (chunk) => {
+                this.view?.webview.postMessage({ type: 'delta', text: chunk });
+              },
+              signal: abortController.signal,
+            })
+      );
       this.session = appendTurn(this.session, {
         input,
         agent: result.agent,
@@ -105,6 +122,15 @@ class CopilotXChatViewProvider {
         reason: result.reason,
         text: result.text,
       });
+      if (result.plan || result.pipeline) {
+        const p = result.pipeline || {};
+        this.view?.webview.postMessage({
+          type: 'pipeline',
+          plan: result.plan || p.plan || { tasks: [], sharedDecisions: [] },
+          taskResults: result.taskResults || p.taskResults || [],
+          qcFindings: result.qcFindings || p.qcFindings || [],
+        });
+      }
       const pending = (result.proposals || []).filter((p) => !p.applied);
       for (const proposal of pending) {
         proposalReview.storeProposal(proposal);
@@ -253,6 +279,28 @@ class CopilotXChatViewProvider {
     }
     .proposal .review:hover, .proposal .discard:hover { background: var(--hover-overlay); }
     .proposal .done { font-size: 11px; color: var(--muted); }
+    .pipeline-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: var(--bubble);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .pipeline-head {
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .pipeline-head:hover { color: var(--fg); }
+    .pipeline-body { display: none; font-size: 12px; }
+    .pipeline-card.open .pipeline-body { display: block; }
+    .pipeline-body .task-line { line-height: 1.5; word-break: break-word; }
+    .pipeline-body .task-line .st-done { color: var(--green); }
+    .pipeline-body .task-line .st-escalated { color: var(--red); }
+    .pipeline-body .task-line .st-skipped, .pipeline-body .qc-line { color: var(--muted); }
+    .pipeline-body .qc-line { word-break: break-all; }
     footer {
       display: flex;
       gap: 6px;
@@ -297,7 +345,7 @@ class CopilotXChatViewProvider {
 <body>
   <header>
     <h1>CopilotX Chat</h1>
-    <p>Ask · Explore · Plan · Custom — workspace-aware</p>
+    <p>Ask · Explore · Plan · Custom — workspace-aware · Pipeline</p>
   </header>
   <div id="thread"></div>
   <div id="status"></div>
@@ -444,6 +492,59 @@ class CopilotXChatViewProvider {
       thread.scrollTop = thread.scrollHeight;
     }
 
+    function addPipeline(data) {
+      const taskResults = data.taskResults || [];
+      const qcFindings = data.qcFindings || [];
+
+      const card = document.createElement('div');
+      card.className = 'pipeline-card';
+
+      const head = document.createElement('div');
+      head.className = 'pipeline-head';
+      head.textContent =
+        'Pipeline — ' + taskResults.length + ' tasks · ' + qcFindings.length + ' findings' +
+        ' (click to expand)';
+      head.addEventListener('click', () => card.classList.toggle('open'));
+      card.appendChild(head);
+
+      const body = document.createElement('div');
+      body.className = 'pipeline-body';
+      for (const t of taskResults) {
+        const line = document.createElement('div');
+        line.className = 'task-line';
+        const glyph = document.createElement('span');
+        const st = String(t.status || '');
+        if (st === 'done') {
+          glyph.className = 'st-done';
+          glyph.textContent = '✔';
+        } else if (st === 'escalated') {
+          glyph.className = 'st-escalated';
+          glyph.textContent = '⚠';
+        } else if (st === 'skipped-offline') {
+          glyph.className = 'st-skipped';
+          glyph.textContent = '○';
+        } else {
+          glyph.className = 'st-skipped';
+          glyph.textContent = '○';
+        }
+        line.appendChild(glyph);
+        line.appendChild(
+          document.createTextNode(' ' + (t.id || '?') + ' — ' + st + ' (' + (t.rounds || 0) + ' rounds)')
+        );
+        body.appendChild(line);
+      }
+      for (const f of qcFindings) {
+        const line = document.createElement('div');
+        line.className = 'qc-line';
+        line.textContent = String(f.severity || '') + ' ' + String(f.file || '') + ' — ' + String(f.issue || '');
+        body.appendChild(line);
+      }
+      card.appendChild(body);
+
+      thread.appendChild(card);
+      thread.scrollTop = thread.scrollHeight;
+    }
+
     function resolveProposal(id, applied) {
       const card = thread.querySelector('.proposal[data-proposal-id="' + id + '"]');
       if (!card) return;
@@ -544,6 +645,9 @@ class CopilotXChatViewProvider {
       if (m.type === 'streamEnd') endStream();
       if (m.type === 'proposals') {
         (m.items || []).forEach(addProposal);
+      }
+      if (m.type === 'pipeline') {
+        addPipeline(m);
       }
       if (m.type === 'proposalResolved') resolveProposal(m.id, m.applied);
       if (m.type === 'status') status.textContent = m.text;
