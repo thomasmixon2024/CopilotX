@@ -8,6 +8,9 @@ const proposals = new Map();
 
 class ProposalContentProvider {
   provideTextDocumentContent(uri) {
+    // "-empty" sentinels render as the empty left side of a new-file diff;
+    // they are derived from the stored proposal, never stored separately.
+    if (uri.query.endsWith('-empty')) return '';
     const proposal = proposals.get(uri.query);
     return proposal ? proposal.proposed : '';
   }
@@ -31,6 +34,10 @@ function getProposal(id) {
   return proposals.get(id);
 }
 
+function listPendingProposals() {
+  return [...proposals.values()];
+}
+
 async function reviewProposal(id) {
   const proposal = proposals.get(id);
   if (!proposal) {
@@ -40,9 +47,6 @@ async function reviewProposal(id) {
   const originalUri = proposal.created
     ? vscode.Uri.from({ scheme: PROPOSAL_SCHEME, path: proposal.path, query: `${proposal.id}-empty` })
     : vscode.Uri.file(proposal.path);
-  if (proposal.created) {
-    proposals.set(`${proposal.id}-empty`, { proposed: '' });
-  }
   const proposedUri = vscode.Uri.from({
     scheme: PROPOSAL_SCHEME,
     path: proposal.path,
@@ -61,6 +65,16 @@ async function acceptProposal(id) {
   const proposal = proposals.get(id);
   if (!proposal) {
     vscode.window.showWarningMessage('CopilotX: proposal no longer available.');
+    return null;
+  }
+  const dirtyDoc = vscode.workspace.textDocuments.find(
+    (d) => d.uri.scheme === 'file' && d.uri.fsPath === proposal.path && d.isDirty
+  );
+  if (dirtyDoc) {
+    vscode.window.showErrorMessage(
+      `CopilotX: ${proposal.relPath} has unsaved edits in an open editor. ` +
+        'Save or revert that buffer first so the applied change is not lost, then accept again.'
+    );
     return null;
   }
   try {
@@ -87,6 +101,7 @@ module.exports = {
   registerProposalReview,
   storeProposal,
   getProposal,
+  listPendingProposals,
   reviewProposal,
   acceptProposal,
   discardProposal,

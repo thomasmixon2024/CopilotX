@@ -24,24 +24,26 @@ function requireWorkspaceFile(relPath, workspace, mustExist) {
   return absolute;
 }
 
+function linesOf(text) {
+  const arr = text ? text.split(/\r?\n/) : [];
+  if (arr.length && arr[arr.length - 1] === '') arr.pop();
+  return arr;
+}
+
 function diffStats(original, proposed) {
-  function linesOf(text) {
-    const arr = text ? text.split(/\r?\n/) : [];
-    if (arr.length && arr[arr.length - 1] === '') arr.pop();
-    return arr;
-  }
   const before = linesOf(original);
   const after = linesOf(proposed);
-  let added = 0;
-  let removed = 0;
-  const max = Math.max(before.length, after.length);
-  for (let i = 0; i < max; i += 1) {
-    if (before[i] !== after[i]) {
-      if (i < before.length) removed += 1;
-      if (i < after.length) added += 1;
-    }
+  let start = 0;
+  while (start < before.length && start < after.length && before[start] === after[start]) {
+    start += 1;
   }
-  return { added, removed };
+  let endB = before.length;
+  let endA = after.length;
+  while (endB > start && endA > start && before[endB - 1] === after[endA - 1]) {
+    endB -= 1;
+    endA -= 1;
+  }
+  return { added: endA - start, removed: endB - start };
 }
 
 function buildProposal(call, workspace) {
@@ -70,7 +72,15 @@ function buildProposal(call, workspace) {
     }
     absolute = requireWorkspaceFile(args.path, workspace, true);
     original = fs.readFileSync(absolute, 'utf8');
-    const occurrences = original.split(args.find).length - 1;
+    // Match against a normalized copy so LF snippets hit CRLF files, then
+    // re-hydrate the file's own line-ending convention.
+    const usesCrlf = original.includes('\r\n');
+    const haystack = usesCrlf ? original.replace(/\r\n/g, '\n') : original;
+    const needle = args.find.replace(/\r\n/g, '\n');
+    let replacement = args.replace;
+    replacement = replacement.replace(/\r\n/g, '\n');
+
+    const occurrences = haystack.split(needle).length - 1;
     if (occurrences === 0) {
       throw new Error('edit_file: the find text does not appear in the file.');
     }
@@ -79,7 +89,9 @@ function buildProposal(call, workspace) {
         `edit_file: the find text appears ${occurrences} times. Provide a longer, unique snippet.`
       );
     }
-    proposed = original.replace(args.find, args.replace);
+    // Function-form replace prevents $& / $` / $' expansion in the payload.
+    const replaced = haystack.replace(needle, () => replacement);
+    proposed = usesCrlf ? replaced.replace(/\n/g, '\r\n') : replaced;
   } else {
     throw new Error(`Unknown write tool: ${call.name}`);
   }
@@ -99,19 +111,29 @@ function buildProposal(call, workspace) {
   };
 }
 
+// Pure drift check: given the proposal and the file's current on-disk content
+// (null when the file is missing), returns an error message or null when safe.
+function checkDrift(proposal, currentOnDisk) {
+  if (!proposal || !proposal.path) return 'Invalid proposal.';
+  if (currentOnDisk === null || currentOnDisk === undefined) {
+    return proposal.created ? null : 'File no longer exists. Discard and re-propose.';
+  }
+  if (currentOnDisk !== proposal.original) {
+    return 'File changed since the proposal was made. Discard and re-propose.';
+  }
+  return null;
+}
+
 function applyProposal(proposal) {
   if (!proposal || !proposal.path) throw new Error('Invalid proposal.');
-  if (fs.existsSync(proposal.path)) {
-    const current = fs.readFileSync(proposal.path, 'utf8');
-    if (current !== proposal.original) {
-      throw new Error('File changed since the proposal was made. Discard and re-propose.');
-    }
-  } else if (!proposal.created) {
-    throw new Error('File no longer exists. Discard and re-propose.');
-  }
+  const current = fs.existsSync(proposal.path)
+    ? fs.readFileSync(proposal.path, 'utf8')
+    : null;
+  const drift = checkDrift(proposal, current);
+  if (drift) throw new Error(drift);
   fs.mkdirSync(path.dirname(proposal.path), { recursive: true });
   fs.writeFileSync(proposal.path, proposal.proposed, 'utf8');
   return { applied: true, path: proposal.path, diff: proposal.diff };
 }
 
-module.exports = { buildProposal, applyProposal, diffStats };
+module.exports = { buildProposal, applyProposal, checkDrift, diffStats };

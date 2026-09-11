@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('fs');
+const fsp = require('fs/promises');
 const path = require('path');
 
 const MAX_FILE_BYTES = 100 * 1024;
@@ -168,7 +169,17 @@ function resolveWorkspaceFile(filePath, workspace, { mustExist = true } = {}) {
   } else if (mustExist) {
     throw new Error(`File does not exist: ${filePath}`);
   } else {
-    realPath = path.resolve(fs.realpathSync(path.dirname(absolute)), path.basename(absolute));
+    // Resolve through the nearest existing ancestor so new files inside
+    // not-yet-created subdirectories still validate against the workspace.
+    let probe = path.dirname(absolute);
+    const tail = [];
+    while (!fs.existsSync(probe)) {
+      tail.unshift(path.basename(probe));
+      const parent = path.dirname(probe);
+      if (parent === probe) break;
+      probe = parent;
+    }
+    realPath = path.resolve(fs.realpathSync(probe), ...tail, path.basename(absolute));
   }
   const realRoots = roots.map((root) => fs.realpathSync(root));
   const insideRoot = roots.some(
@@ -180,20 +191,20 @@ function resolveWorkspaceFile(filePath, workspace, { mustExist = true } = {}) {
   return realPath;
 }
 
-function readFile(input, workspace) {
+async function readFile(input, workspace) {
   const args = input && typeof input === 'object' ? input : {};
   const filePath = resolveWorkspaceFile(args.path, workspace);
-  const stat = fs.statSync(filePath);
+  const stat = await fsp.stat(filePath);
   if (!stat.isFile()) throw new Error('Path is not a file.');
 
   const length = Math.min(stat.size, MAX_FILE_BYTES);
-  const fd = fs.openSync(filePath, 'r');
+  const fh = await fsp.open(filePath, 'r');
   let buffer;
   try {
     buffer = Buffer.alloc(length);
-    fs.readSync(fd, buffer, 0, length, 0);
+    await fh.read(buffer, 0, length, 0);
   } finally {
-    fs.closeSync(fd);
+    await fh.close();
   }
   const bytesTruncated = stat.size > MAX_FILE_BYTES;
 
@@ -215,24 +226,24 @@ function readFile(input, workspace) {
   };
 }
 
-function listDir(input, workspace) {
+async function listDir(input, workspace) {
   const args = input && typeof input === 'object' ? input : {};
   const roots = workspaceRoots(workspace);
   if (!roots.length) throw new Error('No workspace folder is open.');
 
   const dirPath = args.path && String(args.path).trim() ? String(args.path) : roots[0];
   const dirReal = resolveWorkspaceFile(dirPath, workspace);
-  const stat = fs.statSync(dirReal);
+  const stat = await fsp.stat(dirReal);
   if (!stat.isDirectory()) throw new Error('Path is not a directory.');
 
   const depth = Number.isInteger(args.depth) ? Math.min(5, Math.max(1, args.depth)) : 2;
   const entries = [];
 
-  function walk(dir, level, prefix) {
+  async function walk(dir, level, prefix) {
     if (entries.length >= MAX_LIST_ENTRIES || level > depth) return;
     let items;
     try {
-      items = fs.readdirSync(dir, { withFileTypes: true });
+      items = await fsp.readdir(dir, { withFileTypes: true });
     } catch {
       return;
     }
@@ -245,14 +256,14 @@ function listDir(input, workspace) {
       const full = path.join(dir, item.name);
       if (item.isDirectory()) {
         entries.push(`${rel}/`);
-        walk(full, level + 1, rel);
+        await walk(full, level + 1, rel);
       } else if (item.isFile()) {
         entries.push(rel);
       }
     }
   }
 
-  walk(dirReal, 1, path.relative(roots[0], dirReal).split(path.sep).filter(Boolean).join('/'));
+  await walk(dirReal, 1, path.relative(roots[0], dirReal).split(path.sep).filter(Boolean).join('/'));
   return {
     path: dirReal,
     total: entries.length,
@@ -266,7 +277,7 @@ function isProbablyBinary(buffer) {
   return sample.includes(0);
 }
 
-function searchFiles(input, workspace) {
+async function searchFiles(input, workspace) {
   const args = input && typeof input === 'object' ? input : {};
   const pattern = typeof args.pattern === 'string' ? args.pattern : '';
   if (!pattern.trim()) throw new Error('search_files requires a non-empty pattern.');
@@ -299,14 +310,14 @@ function searchFiles(input, workspace) {
   let filesScanned = 0;
   let truncated = false;
 
-  function walk(dir) {
+  async function walk(dir) {
     if (matches.length >= maxResults || filesScanned >= MAX_SEARCH_FILES) {
       truncated = matches.length >= maxResults || filesScanned >= MAX_SEARCH_FILES;
       return;
     }
     let items;
     try {
-      items = fs.readdirSync(dir, { withFileTypes: true });
+      items = await fsp.readdir(dir, { withFileTypes: true });
     } catch {
       return;
     }
@@ -319,15 +330,15 @@ function searchFiles(input, workspace) {
       const full = path.join(dir, item.name);
       if (item.isDirectory()) {
         if (SEARCH_SKIP_DIRS.has(item.name)) continue;
-        walk(full);
+        await walk(full);
         continue;
       }
       if (!item.isFile()) continue;
       let content;
       try {
-        const statFile = fs.statSync(full);
+        const statFile = await fsp.stat(full);
         if (statFile.size > MAX_FILE_BYTES * 4) continue;
-        content = fs.readFileSync(full, 'utf8');
+        content = await fsp.readFile(full, 'utf8');
       } catch {
         continue;
       }
@@ -350,7 +361,7 @@ function searchFiles(input, workspace) {
     }
   }
 
-  walk(realRoot);
+  await walk(realRoot);
   return {
     pattern,
     path: realRoot,
@@ -367,7 +378,7 @@ const TOOL_HANDLERS = {
   search_files: searchFiles,
 };
 
-function executeToolCall(call, workspace) {
+async function executeToolCall(call, workspace) {
   if (!call || !call.name || !TOOL_HANDLERS[call.name]) {
     throw new Error(`Unknown tool: ${call && call.name ? call.name : 'missing name'}`);
   }
