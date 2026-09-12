@@ -5,6 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+const { spawn } = require('child_process');
 const { runTurn } = require('../src/core/engine');
 const { createSession, appendTurn } = require('../src/core/session');
 
@@ -23,6 +24,7 @@ function parseArgs(argv) {
     allowWrites: 'approval',
     prompt: '',
     color: Boolean(process.stdout.isTTY) && !process.env.NO_COLOR,
+    speak: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -34,6 +36,7 @@ function parseArgs(argv) {
     else if (arg === '--allow-writes') options.allowWrites = argv[++i];
     else if (arg === '--prompt' || arg === '-p') options.prompt = argv[++i];
     else if (arg === '--no-color' || arg === '--plain') options.color = false;
+    else if (arg === '--speak') options.speak = true;
     else if (!options.prompt) options.prompt = arg;
     else throw new Error(`Unknown argument: ${arg}`);
   }
@@ -58,6 +61,7 @@ function usage() {
     '  -AllowWrites <mode>     off, approval (default), or auto',
     '  -Prompt <text>          Run one prompt and exit',
     '  --no-color              Disable terminal colors',
+    '  --speak                 Read responses aloud on Windows',
   ].join('\n');
 }
 
@@ -124,6 +128,29 @@ function activity(options, message, color = 'gray') {
   console.log(`${paint(options, color, '  •')} ${paint(options, 'dim', message)}`);
 }
 
+let speechProcess = null;
+
+function stopSpeaking() {
+  if (speechProcess && !speechProcess.killed) speechProcess.kill();
+  speechProcess = null;
+}
+
+function speak(options, text) {
+  if (!options.speak || process.platform !== 'win32' || !text) return;
+  stopSpeaking();
+  const clean = String(text).replace(/```[\s\S]*?```/g, ' code block omitted ')
+    .replace(/[*_`>#]/g, '').replace(/\s+/g, ' ').trim();
+  if (!clean) return;
+  const encoded = Buffer.from(clean, 'utf8').toString('base64');
+  const command = `Add-Type -AssemblyName System.Speech; ` +
+    `$s=New-Object System.Speech.Synthesis.SpeechSynthesizer; ` +
+    `$s.Speak([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encoded}')));`;
+  speechProcess = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], {
+    windowsHide: true, stdio: 'ignore',
+  });
+  speechProcess.on('exit', () => { speechProcess = null; });
+}
+
 async function ask(input, state, options) {
   let responseStarted = false;
   const result = await runTurn({
@@ -149,6 +176,7 @@ async function ask(input, state, options) {
     process.stdout.write(`\n${paint(options, result.mode === 'fallback' ? 'yellow' : 'green', '  copilotx ›')} ${result.text}`);
   }
   process.stdout.write('\n');
+  speak(options, result.text);
   for (const proposal of result.proposals || []) {
     const suffix = options.allowWrites === 'auto' ? 'applied automatically' : 'review before applying';
     activity(options, `${proposal.relPath} +${proposal.stats.added}/-${proposal.stats.removed} · ${suffix}`, 'yellow');
@@ -163,6 +191,8 @@ function printHelp(options) {
     `  ${paint(options, 'cyan', '/status')}   Show workspace, provider, model, and write mode`,
     `  ${paint(options, 'cyan', '/tools')}    Show available workspace tools`,
     `  ${paint(options, 'cyan', '/clear')}    Clear the visible terminal`,
+    `  ${paint(options, 'cyan', '/speak')}    Toggle local speech`,
+    `  ${paint(options, 'cyan', '/stop')}     Stop speaking`,
     `  ${paint(options, 'cyan', '/exit')}     Quit CopilotX`,
     '',
     'Ask anything about the current workspace. File changes remain approval-first by default.',
@@ -191,14 +221,17 @@ async function main() {
     if (input === '/exit' || input === '/quit') break;
     if (input === '/help') printHelp(options);
     else if (input === '/status') header(options, root);
-    else if (input === '/tools') console.log('  read_file  ·  list_dir  ·  search_files  ·  write_file  ·  edit_file');
+    else if (input === '/tools') console.log('  read_file  ·  list_dir  ·  search_files  ·  write_file  ·  edit_file  ·  delete_file');
     else if (input === '/clear') { console.clear(); header(options, root); }
+    else if (input === '/speak') { options.speak = !options.speak; if (!options.speak) stopSpeaking(); console.log(`Speech: ${options.speak ? 'on' : 'off'}`); }
+    else if (input === '/stop') { stopSpeaking(); console.log('Speech stopped.'); }
     else {
       try { await ask(input, state, options); } catch (err) { console.error(`\n${paint(options, 'red', `Error: ${err.message}`)}`); }
     }
     rl.prompt();
   }
   rl.close();
+  stopSpeaking();
 }
 
 main().catch((err) => {

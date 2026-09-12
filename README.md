@@ -255,8 +255,10 @@ from any directory:
 It uses the local provider and fcc-server defaults above. Use `-Prompt "..."` for
 a single request, `-Workspace <path>` to target another repository, and
 `-AllowWrites auto` only when automatic edits are intentional. Changes are
-proposed by default. `/help` and `/exit` are available in the interactive
-prompt.
+proposed by default. Add `-Speak` to read completed responses aloud with
+Windows' built-in local speech engine. In the interactive UI, `/speak` toggles
+speech and `/stop` stops the current response. `/help` and `/exit` are
+available as well.
 
 ## How routing works
 

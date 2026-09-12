@@ -7,7 +7,8 @@ param(
     [ValidateSet('off', 'approval', 'auto')]
     [string]$AllowWrites = 'approval',
     [string]$Prompt = '',
-    [switch]$NoColor
+    [switch]$NoColor,
+    [switch]$Speak
 )
 
 $ErrorActionPreference = 'Stop'
@@ -25,6 +26,7 @@ $args = @(
 )
 if ($Prompt) { $args += @('--prompt', $Prompt) }
 if ($NoColor) { $args += '--no-color' }
+if ($Speak) { $args += '--speak' }
 
 & node $cli @args
 exit $LASTEXITCODE

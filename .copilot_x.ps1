@@ -11,6 +11,7 @@ param(
     [ValidateSet('off', 'approval', 'auto')]
     [string]$AllowWrites = 'approval',
     [string]$Prompt = '',
+    [switch]$Speak,
     [switch]$NoColor
 )
 
@@ -33,6 +34,7 @@ $args = @{
     AllowWrites = $AllowWrites
 }
 if ($Prompt) { $args.Prompt = $Prompt }
+if ($Speak) { $args.Speak = $true }
 if ($NoColor) { $args.NoColor = $true }
 
 & $launcher @args
