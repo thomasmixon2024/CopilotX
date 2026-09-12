@@ -5,6 +5,7 @@
  * provider: none | local | anthropic | openai | nim
  */
 const REQUEST_TIMEOUT_MS = 30000;
+const LOCAL_MAX_TOKENS = 1024;
 
 async function complete({
   provider,
@@ -40,7 +41,7 @@ async function complete({
       signal: requestSignal,
       body: JSON.stringify({
         model: selectedModel,
-        max_tokens: 2048,
+        max_tokens: LOCAL_MAX_TOKENS,
         system,
         messages: messages || [{ role: 'user', content: user }],
         tools: tools && tools.length ? tools : undefined,
