@@ -82,6 +82,16 @@ test('F6: webviewReady message triggers replay via the message handler', async (
   assert.deepStrictEqual(posted[posted.length - 1], { type: 'user', text: 'ping' });
 });
 
+test('chat webview exposes local Speak and Stop speaking controls', () => {
+  const provider = new CopilotXChatViewProvider('/fake/extension');
+  const html = provider._html({ cspSource: 'vscode-resource:' });
+  assert.match(html, /id="speakLatest"[^>]*>Speak<\/button>/);
+  assert.match(html, /Stop speaking/);
+  assert.match(html, /speechSynthesis/);
+  assert.match(html, /SpeechSynthesisUtterance/);
+  assert.doesNotMatch(html, /https?:\/\/[^"']+speech/i);
+});
+
 test('F12: -empty sentinel is derived, not stored', () => {
   const proposal = proposalReview.storeProposal({
     id: 'sentinel-1',
