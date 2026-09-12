@@ -22,6 +22,16 @@ test('getToolDefinitions exposes read/list/search with schemas', () => {
   assert.strictEqual(tools.find((t) => t.name === 'read_file').input_schema.required[0], 'path');
 });
 
+test('write-enabled tool definitions include delete_file', () => {
+  const tools = getToolDefinitions({ includeWrites: true });
+  assert.ok(tools.some((tool) => tool.name === 'delete_file'));
+  assert.deepStrictEqual(getToolDefinitions().map((tool) => tool.name).sort(), [
+    'list_dir',
+    'read_file',
+    'search_files',
+  ]);
+});
+
 test('read_file reads a workspace-relative file with line ranges', async () => {
   const result = await executeToolCall({ name: 'read_file', input: { path: 'hello.txt', start_line: 2, end_line: 3 } }, workspace);
   assert.strictEqual(result.content, 'line2\nline3');

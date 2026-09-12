@@ -285,18 +285,19 @@ listing results are capped so a large repository cannot blow up the context.
 ## Editing your code
 
 With `copilotx.allowWrites` set to `approval` (the default), the model can
-propose changes with two tools:
+propose changes with these tools:
 
 - `write_file` — full content for a new or existing file
 - `edit_file` — replace one exact, unique snippet inside a file
+- `delete_file` — delete one regular file (never a directory or symbolic link)
 
-Proposed changes **never touch disk automatically**. Each proposal appears in
+Proposed changes, including deletions, **never touch disk automatically**. Each proposal appears in
 the sidebar as a card with `+added` / `-removed` counts and three actions:
 
 | Action | What happens |
 |---|---|
 | **Review** | Opens a VS Code diff editor: original ⇄ proposed |
-| **Accept** | Applies the change (only if the file is unchanged since the proposal) and opens the file |
+| **Accept** | Applies the change (only if the file is unchanged since the proposal); deletions remove the file |
 | **Discard** | Drops the proposal |
 
 Setting `copilotx.allowWrites` to `auto` applies changes immediately (the diff

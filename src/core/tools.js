@@ -138,6 +138,21 @@ const WRITE_TOOL_DEFINITIONS = [
       required: ['path', 'find', 'replace'],
     },
   },
+  {
+    name: 'delete_file',
+    description:
+      'Propose deleting one regular workspace file. The file is NOT deleted until the user approves it.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'Workspace-relative file path to delete.',
+        },
+      },
+      required: ['path'],
+    },
+  },
 ];
 
 function getToolDefinitions({ includeWrites = false } = {}) {
@@ -151,7 +166,11 @@ function workspaceRoots(workspace) {
     .filter(Boolean);
 }
 
-function resolveWorkspaceFile(filePath, workspace, { mustExist = true } = {}) {
+function resolveWorkspaceFile(
+  filePath,
+  workspace,
+  { mustExist = true, rejectSymlink = false } = {}
+) {
   if (typeof filePath !== 'string' || !filePath.trim()) {
     throw new Error('A non-empty path is required.');
   }
@@ -165,6 +184,9 @@ function resolveWorkspaceFile(filePath, workspace, { mustExist = true } = {}) {
     : path.resolve(roots[0], filePath);
   let realPath;
   if (fs.existsSync(absolute)) {
+    if (rejectSymlink && fs.lstatSync(absolute).isSymbolicLink()) {
+      throw new Error('Symbolic links are not supported for this operation.');
+    }
     realPath = fs.realpathSync(absolute);
   } else if (mustExist) {
     throw new Error(`File does not exist: ${filePath}`);

@@ -95,7 +95,7 @@ async function runTurn({ input, session, workspace, settings, onDelta, onEvent, 
         emit({ type: 'tool:start', name: call.name, input: call.input });
         let result;
         let proposal = null;
-        if (call.name === 'write_file' || call.name === 'edit_file') {
+        if (call.name === 'write_file' || call.name === 'edit_file' || call.name === 'delete_file') {
           try {
             proposal = buildProposal(call, workspace);
             if (writeMode === 'auto') {
