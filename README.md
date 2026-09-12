@@ -1,11 +1,24 @@
-# CopilotX Chat for VS Code
+# CopilotX
 
-A Copilot-style coding chatbot that runs **inside VS Code**, inspired by
+A multi-agent coding assistant that runs **inside VS Code or directly from
+PowerShell**, inspired by
 [thomasmixon2024/CopilotX](https://github.com/thomasmixon2024/CopilotX).
 
-The reference repo already has a Node multi-agent core (Ask / Explore / Plan / Custom)
-plus a thin extension that uses an input box and an output channel. This project
-turns that idea into a real sidebar chat + official Chat participant.
+CopilotX shares one Node.js engine between its VS Code extension and a
+Codex-style terminal launcher. It routes requests to Ask, Explore, Plan,
+Pipeline, or Custom agents, safely inspects a workspace, and can propose or
+apply file changes.
+
+## Current release
+
+Version `0.3.0` includes:
+
+- A standalone `.copilot_x` PowerShell launcher, so the core is not tied to VS Code.
+- A local-provider health preflight for fcc-server, with categorized unreachable
+  and unconfigured errors.
+- Explicit local model selection for proxies that do not implement `/models`.
+- Multi-agent supervisor/worker/QC pipeline support.
+- Streaming, tool-call, proposal, conflict, and stress-test coverage.
 
 ## What you get
 
@@ -142,7 +155,7 @@ required. The controls are available when the host environment exposes
 unavailable. Utterances are capped at roughly 30,000 characters — some
 browser TTS engines silently skip longer text.
 
-## Live model (optional)
+## Live model
 
 Settings (`Ctrl+,` → CopilotX):
 
@@ -159,9 +172,19 @@ probes the server's `/models` endpoint and picks an available instruct/chat
 model; an explicit `copilotx.model` is always sent unchanged. No API key is
 required for `local` unless your server enforces one.
 
-Known limitations of the `local` provider: responses are fetched in one piece
-(non-streaming), so the sidebar shows the full answer only when the model
-finishes; the Stop button cannot interrupt a turn mid-generation.
+For the bundled fcc-server setup, use:
+
+| Setting | Value |
+|---|---|
+| `copilotx.provider` | `local` |
+| `copilotx.model` | `open_router/anthropic/claude-sonnet-5` |
+| `copilotx.openaiBaseUrl` | `http://127.0.0.1:8082/v1` |
+
+Before a local request, CopilotX checks `http://127.0.0.1:8082/health`.
+Start the proxy with `fcc-server` if it is unreachable. The provider
+configuration endpoint is best-effort; unsupported admin endpoints do not
+block a healthy server. Local responses are fetched in one piece, so the
+sidebar or terminal prints the full answer when generation finishes.
 
 Tool paths are workspace-relative and resolve against the **first workspace
 folder**. Multi-root workspaces should keep the files CopilotX reads or
@@ -193,6 +216,33 @@ vsce package
 ```
 
 Then in VS Code: **Extensions → … → Install from VSIX**.
+
+## Run from PowerShell (Codex-style)
+
+The same core engine runs outside VS Code through the interactive launcher:
+
+```powershell
+.\scripts\copilotx.ps1 -Workspace .
+```
+
+The shorter command is:
+
+```powershell
+.\.copilot_x.ps1 launch
+```
+
+If the launcher has been added to your PowerShell profile, `.copilot_x` works
+from any directory:
+
+```powershell
+.copilot_x launch
+```
+
+It uses the local provider and fcc-server defaults above. Use `-Prompt "..."` for
+a single request, `-Workspace <path>` to target another repository, and
+`-AllowWrites auto` only when automatic edits are intentional. Changes are
+proposed by default. `/help` and `/exit` are available in the interactive
+prompt.
 
 ## How routing works
 

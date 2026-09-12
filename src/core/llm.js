@@ -27,7 +27,12 @@ async function complete({
     if (apiKey) headers['x-api-key'] = apiKey;
     const selectedModel = model || await discoverLocalModel(base);
     if (!selectedModel) {
-      return { mode: 'local', text: null, toolCalls: [] };
+      throw new Error(
+        `No model available from local provider at ${base}. ` +
+          `Model auto-discovery via GET ${base}/models returned nothing (many OpenAI-compatible ` +
+          `proxies, including fcc-server, don't implement it) and no "copilotx.model" is set. ` +
+          `Set "copilotx.model" explicitly, e.g. "open_router/anthropic/claude-sonnet-5".`
+      );
     }
     const res = await fetch(`${base}/messages`, {
       method: 'POST',

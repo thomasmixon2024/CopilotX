@@ -6,6 +6,7 @@ const { resolveAgent, loadRouterConfig } = require('./router');
 const { formatContextBlock, summarize } = require('./session');
 const { formatWorkspaceBlock } = require('./workspace');
 const { complete, streamComplete, localResponse } = require('./llm');
+const { checkLocalProviderHealth } = require('./providerHealth');
 const { getToolDefinitions, executeToolCall } = require('./tools');
 const { buildProposal, applyProposal } = require('./proposals');
 
@@ -50,6 +51,9 @@ async function runTurn({ input, session, workspace, settings, onDelta, signal })
         { role: 'user', content: userParts.join('\n\n') },
       ];
   try {
+    if (settings.provider === 'local') {
+      await checkLocalProviderHealth(settings.openaiBaseUrl);
+    }
     let completed = false;
     for (let round = 0; round < MAX_TOOL_ROUNDS && !completed; round += 1) {
       const requestArgs = {
@@ -156,8 +160,9 @@ async function runTurn({ input, session, workspace, settings, onDelta, signal })
       ].join('\n');
     } else {
       mode = 'fallback';
+      const category = err && err.name === 'ProviderHealthError' ? ` (${err.category})` : '';
       text = [
-        `**${persona.name}** could not reach the configured model.`,
+        `**${persona.name}** could not reach the configured model${category}.`,
         '',
         `Error: \`${err.message}\``,
         '',
