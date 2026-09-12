@@ -80,8 +80,10 @@ async function acceptProposal(id) {
   try {
     const result = applyProposal(proposal);
     proposals.delete(id);
-    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(proposal.path));
-    await vscode.window.showTextDocument(document, { preview: true, preserveFocus: true });
+    if (proposal.tool !== 'delete_file') {
+      const document = await vscode.workspace.openTextDocument(vscode.Uri.file(proposal.path));
+      await vscode.window.showTextDocument(document, { preview: true, preserveFocus: true });
+    }
     vscode.window.showInformationMessage(
       `CopilotX applied: ${proposal.relPath} (+${proposal.diff.added}/-${proposal.diff.removed})`
     );

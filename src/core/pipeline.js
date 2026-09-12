@@ -80,7 +80,7 @@ async function runAgentTurn({ personaKey, personas, input, session, workspace, s
       for (const call of live.toolCalls) {
         let result;
         let proposal = null;
-        if (call.name === 'write_file' || call.name === 'edit_file') {
+        if (call.name === 'write_file' || call.name === 'edit_file' || call.name === 'delete_file') {
           try {
             proposal = buildProposal(call, workspace);
             if (writeMode === 'auto') {
