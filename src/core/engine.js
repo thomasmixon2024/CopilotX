@@ -17,11 +17,20 @@ function loadPersonas() {
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 }
 
-async function runTurn({ input, session, workspace, settings, onDelta, signal }) {
+async function runTurn({ input, session, workspace, settings, onDelta, onEvent, signal }) {
+  const emit = (event) => {
+    if (typeof onEvent !== 'function') return;
+    try {
+      onEvent(event);
+    } catch {
+      // UI telemetry must never change engine behavior.
+    }
+  };
   const routerCfg = loadRouterConfig();
   const personas = loadPersonas();
   const routed = resolveAgent(input, routerCfg);
   const persona = personas[routed.agent] || personas.ask;
+  emit({ type: 'turn:start', agent: routed.agent, agentName: persona.name });
 
   const contextBlock = formatContextBlock(session);
   const workspaceBlock = settings.includeWorkspace ? formatWorkspaceBlock(workspace) : '';
@@ -83,6 +92,7 @@ async function runTurn({ input, session, workspace, settings, onDelta, signal })
 
       messages.push(live.assistantMessage);
       for (const call of live.toolCalls) {
+        emit({ type: 'tool:start', name: call.name, input: call.input });
         let result;
         let proposal = null;
         if (call.name === 'write_file' || call.name === 'edit_file') {
@@ -107,6 +117,13 @@ async function runTurn({ input, session, workspace, settings, onDelta, signal })
               };
             }
             proposals.push(proposal);
+            emit({
+              type: 'proposal',
+              name: call.name,
+              path: proposal.relPath,
+              applied: Boolean(proposal.applied),
+              stats: proposal.stats,
+            });
           } catch (err) {
             result = { error: err.message };
           }
@@ -116,6 +133,7 @@ async function runTurn({ input, session, workspace, settings, onDelta, signal })
           } catch (err) {
             result = { error: err.message };
           }
+          emit({ type: 'tool:done', name: call.name, ok: !result?.error });
         }
         if (settings.provider === 'anthropic') {
           messages.push({
@@ -189,7 +207,7 @@ async function runTurn({ input, session, workspace, settings, onDelta, signal })
     });
   }
 
-  return {
+  const response = {
     agent: routed.agent,
     agentName: persona.name,
     reason: routed.reason,
@@ -199,6 +217,8 @@ async function runTurn({ input, session, workspace, settings, onDelta, signal })
     proposals,
     summary: summarize(text),
   };
+  emit({ type: 'turn:done', mode, proposals: proposals.length });
+  return response;
 }
 
 module.exports = { runTurn };

@@ -10,7 +10,8 @@ param(
     [string]$BaseUrl = 'http://127.0.0.1:8082/v1',
     [ValidateSet('off', 'approval', 'auto')]
     [string]$AllowWrites = 'approval',
-    [string]$Prompt = ''
+    [string]$Prompt = '',
+    [switch]$NoColor
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,6 +33,7 @@ $args = @{
     AllowWrites = $AllowWrites
 }
 if ($Prompt) { $args.Prompt = $Prompt }
+if ($NoColor) { $args.NoColor = $true }
 
 & $launcher @args
 exit $LASTEXITCODE

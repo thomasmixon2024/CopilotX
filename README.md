@@ -225,6 +225,20 @@ The same core engine runs outside VS Code through the interactive launcher:
 .\scripts\copilotx.ps1 -Workspace .
 ```
 
+The launcher opens a dependency-free Codex-style terminal UI with a branded
+splash, workspace/provider/model header, colored tool and proposal activity,
+and slash commands (`/help`, `/status`, `/tools`, `/clear`, `/exit`). Colors
+automatically turn off when output is redirected; use `-NoColor` (or
+`--no-color` with `npm run cli`) for scripts and CI. One-shot prompts remain
+non-interactive and exit after the response:
+
+```powershell
+.\scripts\copilotx.ps1 -Prompt "Explain this repository" -NoColor
+```
+
+Write approval remains `approval` by default. Select `-AllowWrites auto` only
+when automatic file application is intended; `off` disables write tools.
+
 The shorter command is:
 
 ```powershell

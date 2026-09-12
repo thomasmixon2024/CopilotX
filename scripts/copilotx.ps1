@@ -6,7 +6,8 @@ param(
     [string]$BaseUrl = 'http://127.0.0.1:8082/v1',
     [ValidateSet('off', 'approval', 'auto')]
     [string]$AllowWrites = 'approval',
-    [string]$Prompt = ''
+    [string]$Prompt = '',
+    [switch]$NoColor
 )
 
 $ErrorActionPreference = 'Stop'
@@ -23,6 +24,7 @@ $args = @(
     '--allow-writes', $AllowWrites
 )
 if ($Prompt) { $args += @('--prompt', $Prompt) }
+if ($NoColor) { $args += '--no-color' }
 
 & node $cli @args
 exit $LASTEXITCODE
