@@ -5,7 +5,7 @@
  * provider: none | local | anthropic | openai | nim
  */
 const REQUEST_TIMEOUT_MS = 30000;
-const LOCAL_MAX_TOKENS = 1024;
+const LOCAL_MAX_TOKENS = 768;
 
 async function complete({
   provider,
