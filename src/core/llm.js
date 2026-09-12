@@ -6,6 +6,7 @@
  */
 const REQUEST_TIMEOUT_MS = 30000;
 const LOCAL_MAX_TOKENS = 768;
+const LOCAL_REFRESH_BUDGETS = [LOCAL_MAX_TOKENS, 512, 384, 256];
 
 async function complete({
   provider,
@@ -35,33 +36,39 @@ async function complete({
           `Set "copilotx.model" explicitly, e.g. "open_router/anthropic/claude-sonnet-5".`
       );
     }
-    const res = await fetch(`${base}/messages`, {
-      method: 'POST',
-      headers,
-      signal: requestSignal,
-      body: JSON.stringify({
-        model: selectedModel,
-        max_tokens: LOCAL_MAX_TOKENS,
-        system,
-        messages: messages || [{ role: 'user', content: user }],
-        tools: tools && tools.length ? tools : undefined,
-      }),
-    });
-    if (!res.ok) {
+    let lastError;
+    for (let attempt = 0; attempt < LOCAL_REFRESH_BUDGETS.length; attempt += 1) {
+      const res = await fetch(`${base}/messages`, {
+        method: 'POST',
+        headers,
+        signal: combineSignals(signal, timeoutMs || REQUEST_TIMEOUT_MS),
+        body: JSON.stringify({
+          model: selectedModel,
+          max_tokens: LOCAL_REFRESH_BUDGETS[attempt],
+          system,
+          messages: messages || [{ role: 'user', content: user }],
+          tools: tools && tools.length ? tools : undefined,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const content = data.content || [];
+        return {
+          mode: 'live',
+          text: content.filter((item) => item.type === 'text').map((item) => item.text).join('\n'),
+          toolCalls: content
+            .filter((item) => item.type === 'tool_use')
+            .map((item) => ({ id: item.id, name: item.name, input: item.input || {} })),
+          assistantMessage: { role: 'assistant', content },
+          model: selectedModel,
+        };
+      }
       const err = await res.text();
-      throw new Error(`Local model ${res.status}: ${err.slice(0, 400)}`);
+      lastError = new Error(`Local model ${res.status}: ${err.slice(0, 400)}`);
+      const isCreditCap = res.status === 402 || /billing|credit|afford|max_tokens/i.test(err);
+      if (!isCreditCap || attempt === LOCAL_REFRESH_BUDGETS.length - 1) throw lastError;
     }
-    const data = await res.json();
-    const content = data.content || [];
-    return {
-      mode: 'live',
-      text: content.filter((item) => item.type === 'text').map((item) => item.text).join('\n'),
-      toolCalls: content
-        .filter((item) => item.type === 'tool_use')
-        .map((item) => ({ id: item.id, name: item.name, input: item.input || {} })),
-      assistantMessage: { role: 'assistant', content },
-      model: selectedModel,
-    };
+    throw lastError;
   }
 
   if (!provider || provider === 'none' || !apiKey) {

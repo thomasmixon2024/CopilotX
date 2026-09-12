@@ -8,6 +8,7 @@ const readline = require('readline');
 const { spawn } = require('child_process');
 const { runTurn } = require('../src/core/engine');
 const { createSession, appendTurn } = require('../src/core/session');
+const { refreshLocalProvider } = require('../src/core/providerHealth');
 
 const ANSI = {
   reset: '\x1b[0m', bold: '\x1b[1m', dim: '\x1b[2m', cyan: '\x1b[36m',
@@ -189,6 +190,7 @@ function printHelp(options) {
     paint(options, 'bold', 'Commands'),
     `  ${paint(options, 'cyan', '/help')}     Show this help`,
     `  ${paint(options, 'cyan', '/status')}   Show workspace, provider, model, and write mode`,
+    `  ${paint(options, 'cyan', '/refresh')}  Refresh local provider health and credit state`,
     `  ${paint(options, 'cyan', '/tools')}    Show available workspace tools`,
     `  ${paint(options, 'cyan', '/clear')}    Clear the visible terminal`,
     `  ${paint(options, 'cyan', '/speak')}    Toggle local speech`,
@@ -221,6 +223,14 @@ async function main() {
     if (input === '/exit' || input === '/quit') break;
     if (input === '/help') printHelp(options);
     else if (input === '/status') header(options, root);
+    else if (input === '/refresh') {
+      try {
+        const result = await refreshLocalProvider(options.baseUrl);
+        activity(options, `provider refreshed (${result.status || 'healthy'})`, 'green');
+      } catch (err) {
+        activity(options, `provider refresh failed: ${err.message}`, 'red');
+      }
+    }
     else if (input === '/tools') console.log('  read_file  ·  list_dir  ·  search_files  ·  write_file  ·  edit_file  ·  delete_file');
     else if (input === '/clear') { console.clear(); header(options, root); }
     else if (input === '/speak') { options.speak = !options.speak; if (!options.speak) stopSpeaking(); console.log(`Speech: ${options.speak ? 'on' : 'off'}`); }

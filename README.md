@@ -227,9 +227,12 @@ The same core engine runs outside VS Code through the interactive launcher:
 
 The launcher opens a dependency-free Codex-style terminal UI with a branded
 splash, workspace/provider/model header, colored tool and proposal activity,
-and slash commands (`/help`, `/status`, `/tools`, `/clear`, `/exit`). Colors
+and slash commands (`/help`, `/status`, `/refresh`, `/tools`, `/clear`, `/exit`). Colors
 automatically turn off when output is redirected; use `-NoColor` (or
-`--no-color` with `npm run cli`) for scripts and CI. One-shot prompts remain
+`--no-color` with `npm run cli`) for scripts and CI. `/refresh` re-checks the
+local fcc-server health and configuration. Credit-limit responses automatically
+retry with smaller budgets (768, 512, 384, then 256 tokens), without an
+unbounded retry loop. One-shot prompts remain
 non-interactive and exit after the response:
 
 ```powershell

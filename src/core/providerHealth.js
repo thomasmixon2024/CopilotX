@@ -75,4 +75,9 @@ async function checkLocalProviderHealth(openaiBaseUrl) {
   }
 }
 
-module.exports = { checkLocalProviderHealth, ProviderHealthError };
+async function refreshLocalProvider(openaiBaseUrl) {
+  const result = await checkLocalProviderHealth(openaiBaseUrl);
+  return { refreshedAt: new Date().toISOString(), ...result };
+}
+
+module.exports = { checkLocalProviderHealth, refreshLocalProvider, ProviderHealthError };
