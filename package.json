@@ -1,9 +1,13 @@
 {
   "name": "copilotx-chat",
-  "displayName": "CopilotX Chat",
-  "description": "Copilot-style multi-agent chat for VS Code. Routes to Ask, Explore, Plan, or Custom agents with workspace context and optional live LLM.",
-  "version": "0.2.0",
+  "displayName": "CopilotX",
+  "description": "A VS Code extension and Codex-style PowerShell CLI for multi-agent coding with local and hosted LLM providers.",
+  "version": "0.3.0",
   "publisher": "local",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thomasmixon2024/CopilotX.git"
+  },
   "engines": {
     "vscode": "^1.90.0",
     "node": ">=18"
@@ -14,7 +18,8 @@
   ],
   "main": "./src/extension.js",
   "scripts": {
-    "test": "node --test tests/"
+    "test": "node --test tests/",
+    "cli": "node scripts/copilotx-cli.js"
   },
   "contributes": {
     "viewsContainers": {

@@ -1,11 +1,24 @@
-# CopilotX Chat for VS Code
+# CopilotX
 
-A Copilot-style coding chatbot that runs **inside VS Code**, inspired by
+A multi-agent coding assistant that runs **inside VS Code or directly from
+PowerShell**, inspired by
 [thomasmixon2024/CopilotX](https://github.com/thomasmixon2024/CopilotX).
 
-The reference repo already has a Node multi-agent core (Ask / Explore / Plan / Custom)
-plus a thin extension that uses an input box and an output channel. This project
-turns that idea into a real sidebar chat + official Chat participant.
+CopilotX shares one Node.js engine between its VS Code extension and a
+Codex-style terminal launcher. It routes requests to Ask, Explore, Plan,
+Pipeline, or Custom agents, safely inspects a workspace, and can propose or
+apply file changes.
+
+## Current release
+
+Version `0.3.0` includes:
+
+- A standalone `.copilot_x` PowerShell launcher, so the core is not tied to VS Code.
+- A local-provider health preflight for fcc-server, with categorized unreachable
+  and unconfigured errors.
+- Explicit local model selection for proxies that do not implement `/models`.
+- Multi-agent supervisor/worker/QC pipeline support.
+- Streaming, tool-call, proposal, conflict, and stress-test coverage.
 
 ## What you get
 
@@ -132,17 +145,17 @@ response so you can verify the extension and routing.
 
 ## Hear responses aloud
 
-Every assistant response in the CopilotX sidebar has a **Hear aloud** button,
-and the chat footer has a persistent **speaker symbol** that reads the most
-recent response aloud — click it again (it turns into a stop square) to stop
-playback. Both use the VS Code webview's built-in browser speech synthesis, so
+Every assistant response in the CopilotX sidebar has a **Speak** button, and
+the chat footer has a persistent **Speak** button that reads the most recent
+response aloud — click it again (it becomes **Stop speaking**) to stop
+playback. Both use the VS Code webview's built-in Web Speech API speech synthesis, so
 the response stays local and no speech service or additional API key is
 required. The controls are available when the host environment exposes
 `speechSynthesis`; otherwise the sidebar reports that text-to-speech is
 unavailable. Utterances are capped at roughly 30,000 characters — some
 browser TTS engines silently skip longer text.
 
-## Live model (optional)
+## Live model
 
 Settings (`Ctrl+,` → CopilotX):
 
@@ -159,9 +172,19 @@ probes the server's `/models` endpoint and picks an available instruct/chat
 model; an explicit `copilotx.model` is always sent unchanged. No API key is
 required for `local` unless your server enforces one.
 
-Known limitations of the `local` provider: responses are fetched in one piece
-(non-streaming), so the sidebar shows the full answer only when the model
-finishes; the Stop button cannot interrupt a turn mid-generation.
+For the bundled fcc-server setup, use:
+
+| Setting | Value |
+|---|---|
+| `copilotx.provider` | `local` |
+| `copilotx.model` | `open_router/anthropic/claude-sonnet-5` |
+| `copilotx.openaiBaseUrl` | `http://127.0.0.1:8082/v1` |
+
+Before a local request, CopilotX checks `http://127.0.0.1:8082/health`.
+Start the proxy with `fcc-server` if it is unreachable. The provider
+configuration endpoint is best-effort; unsupported admin endpoints do not
+block a healthy server. Local responses are fetched in one piece, so the
+sidebar or terminal prints the full answer when generation finishes.
 
 Tool paths are workspace-relative and resolve against the **first workspace
 folder**. Multi-root workspaces should keep the files CopilotX reads or
@@ -194,6 +217,52 @@ vsce package
 
 Then in VS Code: **Extensions → … → Install from VSIX**.
 
+## Run from PowerShell (Codex-style)
+
+The same core engine runs outside VS Code through the interactive launcher:
+
+```powershell
+.\scripts\copilotx.ps1 -Workspace .
+```
+
+The launcher opens a dependency-free Codex-style terminal UI with a branded
+splash, workspace/provider/model header, colored tool and proposal activity,
+and slash commands (`/help`, `/status`, `/refresh`, `/tools`, `/clear`, `/exit`). Colors
+automatically turn off when output is redirected; use `-NoColor` (or
+`--no-color` with `npm run cli`) for scripts and CI. `/refresh` re-checks the
+local fcc-server health and configuration. Credit-limit responses automatically
+retry with smaller budgets (768, 512, 384, then 256 tokens), without an
+unbounded retry loop. One-shot prompts remain
+non-interactive and exit after the response:
+
+```powershell
+.\scripts\copilotx.ps1 -Prompt "Explain this repository" -NoColor
+```
+
+Write approval remains `approval` by default. Select `-AllowWrites auto` only
+when automatic file application is intended; `off` disables write tools.
+
+The shorter command is:
+
+```powershell
+.\.copilot_x.ps1 launch
+```
+
+If the launcher has been added to your PowerShell profile, `.copilot_x` works
+from any directory:
+
+```powershell
+.copilot_x launch
+```
+
+It uses the local provider and fcc-server defaults above. Use `-Prompt "..."` for
+a single request, `-Workspace <path>` to target another repository, and
+`-AllowWrites auto` only when automatic edits are intentional. Changes are
+proposed by default. Add `-Speak` to read completed responses aloud with
+Windows' built-in local speech engine. In the interactive UI, `/speak` toggles
+speech and `/stop` stops the current response. `/help` and `/exit` are
+available as well.
+
 ## How routing works
 
 User text is tokenized and scored against `config/router.json` intents.
@@ -221,18 +290,19 @@ listing results are capped so a large repository cannot blow up the context.
 ## Editing your code
 
 With `copilotx.allowWrites` set to `approval` (the default), the model can
-propose changes with two tools:
+propose changes with these tools:
 
 - `write_file` — full content for a new or existing file
 - `edit_file` — replace one exact, unique snippet inside a file
+- `delete_file` — delete one regular file (never a directory or symbolic link)
 
-Proposed changes **never touch disk automatically**. Each proposal appears in
+Proposed changes, including deletions, **never touch disk automatically**. Each proposal appears in
 the sidebar as a card with `+added` / `-removed` counts and three actions:
 
 | Action | What happens |
 |---|---|
 | **Review** | Opens a VS Code diff editor: original ⇄ proposed |
-| **Accept** | Applies the change (only if the file is unchanged since the proposal) and opens the file |
+| **Accept** | Applies the change (only if the file is unchanged since the proposal); deletions remove the file |
 | **Discard** | Drops the proposal |
 
 Setting `copilotx.allowWrites` to `auto` applies changes immediately (the diff

@@ -95,3 +95,52 @@ test('applyProposal refuses to apply after the file was deleted', () => {
   fs.rmSync(path.join(tmpRoot, 'gone.js'), { force: true });
   assert.throws(() => applyProposal(proposal), /no longer exists/);
 });
+
+test('delete_file creates a deletion proposal and applies only on approval', () => {
+  const target = path.join(tmpRoot, 'delete-me.txt');
+  fs.writeFileSync(target, 'remove me\n', 'utf8');
+  const proposal = buildProposal(
+    { name: 'delete_file', input: { path: 'delete-me.txt' } },
+    workspace
+  );
+  assert.strictEqual(proposal.tool, 'delete_file');
+  assert.strictEqual(proposal.deleted, true);
+  assert.strictEqual(proposal.diff.removed, 1);
+  assert.strictEqual(fs.existsSync(target), true);
+
+  const result = applyProposal(proposal);
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(fs.existsSync(target), false);
+});
+
+test('delete_file rejects directories, traversal, and symlinks', () => {
+  fs.mkdirSync(path.join(tmpRoot, 'not-a-file'), { recursive: true });
+  assert.throws(
+    () => buildProposal({ name: 'delete_file', input: { path: 'not-a-file' } }, workspace),
+    /regular files/
+  );
+  assert.throws(
+    () => buildProposal({ name: 'delete_file', input: { path: '../outside.txt' } }, workspace),
+    /outside the current workspace|File does not exist/
+  );
+
+  const link = path.join(tmpRoot, 'delete-link.txt');
+  const target = path.join(tmpRoot, 'delete-target.txt');
+  fs.writeFileSync(target, 'keep\n', 'utf8');
+  try {
+    try {
+      fs.symlinkSync(target, link, 'file');
+    } catch {
+      return; // Windows without symlink privilege
+    }
+    assert.throws(
+      () => buildProposal({ name: 'delete_file', input: { path: 'delete-link.txt' } }, workspace),
+      /symbolic links/
+    );
+    assert.strictEqual(fs.existsSync(target), true);
+  } finally {
+    fs.rmSync(link, { force: true });
+    fs.rmSync(target, { force: true });
+    fs.rmSync(path.join(tmpRoot, 'not-a-file'), { recursive: true, force: true });
+  }
+});

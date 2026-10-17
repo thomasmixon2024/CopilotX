@@ -291,6 +291,7 @@ class CopilotXChatViewProvider {
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      min-width: 72px;
     }
     .icon-btn:hover { border-color: var(--accent); }
     .icon-btn.speaking { color: var(--accent-fg); border-color: var(--accent); background: var(--accent); }
@@ -391,7 +392,7 @@ class CopilotXChatViewProvider {
     <textarea id="q" placeholder="Ask about the current file…  (@workspace is attached)"></textarea>
     <button id="send">Send</button>
     <button id="stop" class="ghost" style="display:none">Stop</button>
-    <button id="speakLatest" class="icon-btn" title="Listen to the latest response"></button>
+    <button id="speakLatest" class="icon-btn" type="button" title="Speak the latest response" aria-label="Speak the latest response">Speak</button>
     <button id="clear" class="ghost" title="Clear session">Clear</button>
   </footer>
   <script nonce="${nonce}">
@@ -422,7 +423,7 @@ class CopilotXChatViewProvider {
       window.speechSynthesis.cancel();
       if (currentSpeechButton) {
         if (currentSpeechButton.id === 'speakLatest') setSpeaking(false);
-        else currentSpeechButton.textContent = 'Hear aloud';
+        else currentSpeechButton.textContent = 'Speak';
       }
       currentSpeech = null;
       currentSpeechButton = null;
@@ -439,11 +440,11 @@ class CopilotXChatViewProvider {
       const utterance = new SpeechSynthesisUtterance(spoken);
       currentSpeech = utterance;
       currentSpeechButton = button;
-      button.textContent = 'Stop';
+      button.textContent = 'Stop speaking';
       utterance.onend = utterance.onerror = () => {
         if (currentSpeech === utterance) currentSpeech = null;
         if (currentSpeechButton === button) currentSpeechButton = null;
-        button.textContent = 'Hear aloud';
+        button.textContent = 'Speak';
       };
       window.speechSynthesis.speak(utterance);
     }
@@ -461,8 +462,9 @@ class CopilotXChatViewProvider {
         const button = document.createElement('button');
         button.className = 'speak';
         button.type = 'button';
-        button.textContent = 'Hear aloud';
-        button.title = 'Read this response aloud';
+        button.textContent = 'Speak';
+        button.title = 'Speak this response locally';
+        button.setAttribute('aria-label', 'Speak this response locally');
         button.addEventListener('click', () => {
           if (currentSpeech && currentSpeechButton === button) stopSpeech();
           else if (currentSpeech) {
@@ -623,20 +625,10 @@ class CopilotXChatViewProvider {
     stopBtn.addEventListener('click', () => vscode.postMessage({ type: 'stop' }));
 
     const speakLatestBtn = document.getElementById('speakLatest');
-    const SPEAKER_ICON =
-      '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-      '<path d="M8 1.8v12.4L4.6 10.8H2.2A1.2 1.2 0 0 1 1 9.6V6.4a1.2 1.2 0 0 1 1.2-1.2h2.4L8 1.8z" fill="currentColor"/>' +
-      '<path d="M10.6 5.4a3.4 3.4 0 0 1 0 5.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>' +
-      '<path d="M12.7 3.3a6.4 6.4 0 0 1 0 9.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>' +
-      '</svg>';
-    const STOP_ICON =
-      '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-      '<rect x="3.5" y="3.5" width="9" height="9" rx="1.5" fill="currentColor"/>' +
-      '</svg>';
-
     function setSpeaking(on) {
-      speakLatestBtn.innerHTML = on ? STOP_ICON : SPEAKER_ICON;
-      speakLatestBtn.title = on ? 'Stop playback' : 'Listen to the latest response';
+      speakLatestBtn.textContent = on ? 'Stop speaking' : 'Speak';
+      speakLatestBtn.title = on ? 'Stop speaking' : 'Speak the latest response locally';
+      speakLatestBtn.setAttribute('aria-label', speakLatestBtn.title);
       speakLatestBtn.classList.toggle('speaking', on);
     }
 

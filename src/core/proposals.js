@@ -13,11 +13,11 @@ function nextProposalId() {
   return `p${Date.now().toString(36)}-${proposalCounter}`;
 }
 
-function requireWorkspaceFile(relPath, workspace, mustExist) {
+function requireWorkspaceFile(relPath, workspace, mustExist, options = {}) {
   if (typeof relPath !== 'string' || !relPath.trim()) {
     throw new Error('A non-empty path is required.');
   }
-  const absolute = resolveWorkspaceFile(relPath, workspace, { mustExist });
+  const absolute = resolveWorkspaceFile(relPath, workspace, { mustExist, ...options });
   if (mustExist && !fs.existsSync(absolute)) {
     throw new Error(`File does not exist: ${relPath}`);
   }
@@ -52,6 +52,7 @@ function buildProposal(call, workspace) {
   let original;
   let proposed;
   let absolute;
+  let lexicalPath;
 
   if (call.name === 'write_file') {
     if (typeof args.content !== 'string') {
@@ -92,6 +93,20 @@ function buildProposal(call, workspace) {
     // Function-form replace prevents $& / $` / $' expansion in the payload.
     const replaced = haystack.replace(needle, () => replacement);
     proposed = usesCrlf ? replaced.replace(/\n/g, '\r\n') : replaced;
+  } else if (call.name === 'delete_file') {
+    absolute = requireWorkspaceFile(args.path, workspace, true, { rejectSymlink: true });
+    lexicalPath = path.isAbsolute(args.path)
+      ? path.resolve(args.path)
+      : path.resolve(workspace.workspaceFolders[0].path, args.path);
+    const stat = fs.lstatSync(lexicalPath);
+    if (stat.isSymbolicLink()) {
+      throw new Error('delete_file does not support symbolic links.');
+    }
+    if (!stat.isFile()) {
+      throw new Error('delete_file can only delete regular files.');
+    }
+    original = fs.readFileSync(absolute, 'utf8');
+    proposed = '';
   } else {
     throw new Error(`Unknown write tool: ${call.name}`);
   }
@@ -100,11 +115,13 @@ function buildProposal(call, workspace) {
     id: nextProposalId(),
     tool: call.name,
     path: absolute,
+    ...(lexicalPath ? { lexicalPath } : {}),
     relPath: path.relative(
       path.resolve((workspace.workspaceFolders || [{}])[0].path || '.'),
       absolute
     ).split(path.sep).join('/'),
     created: call.name === 'write_file' && !fs.existsSync(absolute),
+    deleted: call.name === 'delete_file',
     original,
     proposed,
     diff: diffStats(original, proposed),
@@ -126,11 +143,22 @@ function checkDrift(proposal, currentOnDisk) {
 
 function applyProposal(proposal) {
   if (!proposal || !proposal.path) throw new Error('Invalid proposal.');
-  const current = fs.existsSync(proposal.path)
-    ? fs.readFileSync(proposal.path, 'utf8')
+  const targetPath = proposal.tool === 'delete_file'
+    ? (proposal.lexicalPath || proposal.path)
+    : proposal.path;
+  const current = fs.existsSync(targetPath)
+    ? fs.readFileSync(targetPath, 'utf8')
     : null;
   const drift = checkDrift(proposal, current);
   if (drift) throw new Error(drift);
+  if (proposal.tool === 'delete_file') {
+    const stat = fs.lstatSync(targetPath);
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      throw new Error('delete_file can only delete the originally proposed regular file.');
+    }
+    fs.unlinkSync(targetPath);
+    return { applied: true, path: proposal.path, diff: proposal.diff };
+  }
   fs.mkdirSync(path.dirname(proposal.path), { recursive: true });
   fs.writeFileSync(proposal.path, proposal.proposed, 'utf8');
   return { applied: true, path: proposal.path, diff: proposal.diff };
